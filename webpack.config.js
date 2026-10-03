@@ -39,11 +39,12 @@ var options = {
   mode: process.env.NODE_ENV || 'development',
   entry: {
     background: path.join(__dirname, 'src', 'pages', 'Background', 'index.js'),
-    contentScript: path.join(__dirname, 'src', 'pages', 'Content', 'index.jsx')
+    contentScript: path.join(__dirname, 'src', 'pages', 'Content', 'index.jsx'),
+    pageBridge: path.join(__dirname, 'src', 'pages', 'Content', 'pageBridge.js')
   },
   // 非标准配置用来调整热更新配置
   chromeExtensionBoilerplate: {
-    notHotReload: ['background', 'contentScript', 'devtools'],
+    notHotReload: ['background', 'contentScript', 'pageBridge', 'devtools'],
   },
   output: {
     filename: '[name].bundle.js',

@@ -1,14 +1,14 @@
 {
-  "name": "wxread-comment-chrome-extension",
-  "version": "1.1.0",
-  "description": "A chrome extension show comment on WeChat Read",
+  "name": "wxread-comment-enhanced-extension",
+  "version": "1.2.0-beta.1",
+  "description": "在微信读书网页版显示公开评论划线，支持点击查看想法，并提供可选评论侧栏与正文定位。",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/my19940202/wx-read-comment-extension"
   },
   "scripts": {
-    "build": "NODE_ENV=production node utils/build.js",
+    "build": "node utils/build.js",
     "start": "node utils/webserver.js",
     "prettier": "prettier --write '**/*.{js,jsx,ts,tsx,json,css,scss,md}'"
   },

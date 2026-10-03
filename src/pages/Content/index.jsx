@@ -1,52 +1,328 @@
-
 import React from 'react';
-import {createRoot} from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import Comment from './Comment';
-import {getCommentData, getBookIdFormNetwork, backgroundLog} from './utils';
+import {
+  filterReviewsByChapterUid,
+  getChapterCatalog,
+  getAllCommentData,
+  getReviewChapterUid,
+  phase2Log,
+  resolveBookId,
+  resolveCurrentChapter,
+} from './utils';
 import './content.styles.css';
+import {
+  clearPublicReviewState,
+  getPublicReviewSyncProps,
+  initializePublicReviewUnderlines,
+  invalidatePublicReviewLayout,
+  renderPublicReviewUnderlines,
+  setFollowReadingPosition,
+  setPublicUnderlinesVisible,
+  setSidebarVisible,
+} from './publicReviewUnderlines';
+
+const SETTINGS_KEY = 'wxrc_phase6_settings';
+const DEFAULT_SETTINGS = {
+  followReadingPosition: true,
+  showPublicUnderlines: true,
+  showSidebar: true,
+  sortOrder: 'reading',
+};
+
+const loadSettings = async () => {
+  try {
+    const stored = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY];
+    return {
+      followReadingPosition: stored?.followReadingPosition !== false,
+      showPublicUnderlines: stored?.showPublicUnderlines !== false,
+      showSidebar: stored?.showSidebar !== false,
+      sortOrder: stored?.sortOrder === 'api' ? 'api' : 'reading',
+    };
+  } catch (error) {
+    console.warn('[WxReadComments][Phase6] settings load failed', String(error));
+    return { ...DEFAULT_SETTINGS };
+  }
+};
 
 let root;
-let params = {
-    listType: 8 // 默认listType 不清楚含义
+let wrapper;
+let syncTimer;
+let scheduledSyncForce = false;
+let syncInFlight = false;
+let syncAgain = false;
+let syncAgainForce = false;
+
+const renderComments = (list, width, isDark, onReload, reviewSync, settings, onSettingChange) => {
+  root.render(
+    <Comment
+      list={list}
+      width={width}
+      isDark={isDark}
+      onReload={onReload}
+      reviewSync={reviewSync}
+      settings={settings}
+      onSettingChange={onSettingChange}
+    />
+  );
 };
-// 每次页面加载都刷新一次bookId
-getBookIdFormNetwork(params);
 
-window.addEventListener('load', async () => {
-    // 1.修改页面结构 便于显示评论dom
-    const wrapper = document.createElement('div');
-    const appDom = document.getElementById('app');
-    const isDark = !document.body.classList.contains('wr_whiteTheme');
-    const {clientHeight: height, clientWidth: width} = document.documentElement;
-    const commentWidth = Math.round(width - 1000 - 100);
-    wrapper.className = 'chrex-comment-wrapper';
-    wrapper.style = `height: ${height}px;width: ${commentWidth}px;`;
-    appDom.append(wrapper);
+const start = async () => {
+  const appDom = document.getElementById('app');
+  if (!appDom) {
+    phase2Log('cannot start: #app was not found');
+    return;
+  }
 
-    // 2.首次页面加载 渲染评论
-    async function renderComments() {
-        let commentList = await getCommentData(params);
-        const props = {list: commentList, width: commentWidth, isDark, params};
-        root = createRoot(wrapper);
-        root.render(<Comment {...props} />);
+  let settings = await loadSettings();
+  setFollowReadingPosition(settings.followReadingPosition);
+  setPublicUnderlinesVisible(settings.showPublicUnderlines);
+  const { clientHeight: height, clientWidth: width } = document.documentElement;
+  const commentWidth = Math.round(width - 1000 - 100);
+
+  wrapper = document.createElement('div');
+  wrapper.className = 'chrex-comment-wrapper';
+  wrapper.style = `height: ${height}px;width: ${commentWidth}px;`;
+  appDom.append(wrapper);
+  const sidebarLauncher = document.createElement('button');
+  sidebarLauncher.type = 'button';
+  sidebarLauncher.className = 'wxrc_sidebar_launcher';
+  sidebarLauncher.textContent = '公开评论';
+  sidebarLauncher.title = '显示右侧评论栏';
+  document.body.appendChild(sidebarLauncher);
+  const applySidebarVisibility = () => {
+    wrapper.hidden = !settings.showSidebar;
+    sidebarLauncher.hidden = settings.showSidebar;
+    document.body.classList.toggle('wxrc_sidebar_visible', settings.showSidebar);
+    setSidebarVisible(settings.showSidebar);
+  };
+  applySidebarVisibility();
+  root = createRoot(wrapper);
+  let latestComments = [];
+  let reviewSync = getPublicReviewSyncProps();
+  const onSettingChange = (key, value) => {
+    if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return;
+    settings = {
+      ...settings,
+      [key]: key === 'sortOrder' ? (value === 'api' ? 'api' : 'reading') : Boolean(value),
+    };
+    setFollowReadingPosition(settings.followReadingPosition);
+    setPublicUnderlinesVisible(settings.showPublicUnderlines);
+    if (key === 'showSidebar') {
+      applySidebarVisibility();
+      invalidatePublicReviewLayout('sidebar-visibility-changed');
     }
-    // 延迟一秒钟渲染评论
-    setTimeout(renderComments, 1000)
+    renderLatestComments();
+    chrome.storage.local.set({ [SETTINGS_KEY]: settings }).catch((error) =>
+      console.warn('[WxReadComments][Phase6] settings save failed', String(error))
+    );
+  };
+  sidebarLauncher.addEventListener('click', () => onSettingChange('showSidebar', true));
+  const renderLatestComments = () =>
+    renderComments(
+      latestComments,
+      commentWidth,
+      !document.body.classList.contains('wr_whiteTheme'),
+      () => scheduleSync(true),
+      reviewSync,
+      settings,
+      onSettingChange
+    );
+  renderLatestComments();
+  initializePublicReviewUnderlines(() => {
+    reviewSync = getPublicReviewSyncProps();
+    renderLatestComments();
+    scheduleSync(true);
+  });
 
-    // 3.监控标题变化(针对切换章节和点击上下一章)重新渲染评论
-    const chapterNode = document.querySelector('.readerTopBar_title_chapter');
-    const observer = new MutationObserver(async (mutationsList, observer) => {
-        for(let mutation of mutationsList) {
-            if (mutation.type === 'characterData') {
-                renderComments();
-            }
-        }
-    });
-    observer.observe(chapterNode, {
-        attributes: true,
-        childList: true,
-        characterData: true,
-        subtree: true
-    });
-});
+  const book = await resolveBookId();
+  if (!book) {
+    phase2Log('bookId resolution failed');
+    return;
+  }
+  phase2Log('bookId resolved', book);
 
+  let catalog;
+  try {
+    catalog = await getChapterCatalog(book.value);
+  } catch (error) {
+    phase2Log('chapter catalog request failed', String(error));
+    return;
+  }
+  phase2Log('chapter catalog loaded', {
+    source: catalog.source,
+    chapterCount: catalog.chapters.length,
+  });
+
+  let activeChapterUid = '';
+
+  const syncCurrentChapter = async (force = false) => {
+    if (syncInFlight) {
+      syncAgain = true;
+      syncAgainForce = syncAgainForce || force;
+      return;
+    }
+    syncInFlight = true;
+    try {
+      const chapter = await resolveCurrentChapter(catalog.chapters);
+      if (!chapter) {
+        phase2Log('current chapterUid was not resolved');
+        return;
+      }
+      if (!force && chapter.chapterUid === activeChapterUid) {
+        return;
+      }
+
+      if (chapter.chapterUid !== activeChapterUid) {
+        clearPublicReviewState(chapter.chapterUid);
+        wrapper.dataset.chapterUid = chapter.chapterUid;
+        delete wrapper.dataset.layoutVersion;
+        latestComments = [];
+        reviewSync = getPublicReviewSyncProps();
+        renderLatestComments();
+      }
+      activeChapterUid = chapter.chapterUid;
+      phase2Log('current chapter resolved', chapter);
+
+      const response = await getAllCommentData({
+        bookId: book.value,
+        chapterUid: chapter.chapterUid,
+        listType: 8,
+      }, () => activeChapterUid === chapter.chapterUid);
+      const filtered = filterReviewsByChapterUid(response, chapter.chapterUid);
+      const allReviews = response.reviews || [];
+      const missingChapterUid = allReviews.filter(
+        (item) => !getReviewChapterUid(item)
+      );
+
+      const currentAfterRequest = await resolveCurrentChapter(catalog.chapters);
+      if (currentAfterRequest?.chapterUid !== chapter.chapterUid) {
+        phase2Log('discarded stale chapter review response', {
+          requestChapterUid: chapter.chapterUid,
+          currentChapterUid: currentAfterRequest?.chapterUid || '',
+        });
+        return;
+      }
+
+      wrapper.dataset.reviewPageCount = String(response.pageCount || 0);
+      wrapper.dataset.reviewCount = String(filtered.length);
+      wrapper.dataset.chapterTotalCount = String(response.chapterTotalCount ?? '');
+      wrapper.dataset.paginationStoppedReason = response.paginationStoppedReason || '';
+
+      const proof = {
+        bookId: book.value,
+        bookIdSource: book.source,
+        chapterUid: chapter.chapterUid,
+        chapterIdx: chapter.chapterIdx,
+        chapterName: chapter.chapterName,
+        chapterUidSource: chapter.source,
+        responseReviewCount: allReviews.length,
+        matchedReviewCount: filtered.length,
+        rejectedReviewCount: allReviews.length - filtered.length,
+        missingChapterUidCount: missingChapterUid.length,
+        responseTotalCount: response.totalCount,
+        hasMore: response.hasMore,
+        synckey: response.synckey,
+        chapterTotalCount: response.chapterTotalCount,
+        pageCount: response.pageCount,
+        paginationStoppedReason: response.paginationStoppedReason,
+      };
+
+      phase2Log('current chapter review filter proof', proof);
+
+      latestComments = filtered;
+      reviewSync = getPublicReviewSyncProps();
+      renderLatestComments();
+      const underlineStats = await renderPublicReviewUnderlines(
+        filtered,
+        chapter.chapterUid
+      );
+      const currentAfterMapping = await resolveCurrentChapter(catalog.chapters);
+      if (
+        underlineStats?.staleDiscarded ||
+        currentAfterMapping?.chapterUid !== chapter.chapterUid
+      ) {
+        phase2Log('discarded stale range mapping result', {
+          requestChapterUid: chapter.chapterUid,
+          currentChapterUid: currentAfterMapping?.chapterUid || '',
+          layoutVersion: underlineStats?.layoutVersion ?? null,
+        });
+        return;
+      }
+      wrapper.dataset.chapterUid = chapter.chapterUid;
+      wrapper.dataset.layoutVersion = String(underlineStats.layoutVersion);
+      wrapper.dataset.mappedRangeCount = String(underlineStats.mappedRangeCount);
+      wrapper.dataset.failedRangeCount = String(underlineStats.failedRangeCount);
+      wrapper.dataset.mappingCallCounts = JSON.stringify(
+        underlineStats.mappingCallCounts || null
+      );
+      reviewSync = getPublicReviewSyncProps();
+      renderLatestComments();
+    } catch (error) {
+      phase2Log('chapter comment sync failed', String(error));
+    } finally {
+      syncInFlight = false;
+      if (syncAgain) {
+        syncAgain = false;
+        const rerunForce = syncAgainForce;
+        syncAgainForce = false;
+        void syncCurrentChapter(rerunForce);
+      }
+    }
+  };
+
+  function scheduleSync(force = false) {
+    scheduledSyncForce = scheduledSyncForce || force;
+    window.clearTimeout(syncTimer);
+    syncTimer = window.setTimeout(() => {
+      const runForce = scheduledSyncForce;
+      scheduledSyncForce = false;
+      void syncCurrentChapter(runForce);
+    }, 180);
+  }
+
+  await syncCurrentChapter();
+
+  let lastBodyClassName = document.body.className;
+  const observer = new MutationObserver((mutations) => {
+    const bodyClassChanged = mutations.some(
+      (mutation) =>
+        mutation.type === 'attributes' &&
+        mutation.target === document.body &&
+        mutation.attributeName === 'class'
+    );
+    if (bodyClassChanged && document.body.className !== lastBodyClassName) {
+      const previousFontClass = lastBodyClassName.match(/wr_reader_font_size_level_\d+/)?.[0];
+      const currentFontClass = document.body.className.match(/wr_reader_font_size_level_\d+/)?.[0];
+      lastBodyClassName = document.body.className;
+      renderLatestComments();
+      if (previousFontClass !== currentFontClass) {
+        invalidatePublicReviewLayout('reader-font-size-changed');
+      }
+      return;
+    }
+    scheduleSync();
+  });
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: [
+      'class',
+      'data-chapter-uid',
+      'data-chapteruid',
+      'aria-current',
+    ],
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  window.addEventListener('popstate', () => scheduleSync());
+  window.addEventListener('hashchange', () => scheduleSync());
+  window.addEventListener('scroll', () => scheduleSync(), true);
+  window.setInterval(() => scheduleSync(), 1000);
+};
+
+if (document.readyState === 'complete') {
+  void start();
+} else {
+  window.addEventListener('load', () => void start(), { once: true });
+}

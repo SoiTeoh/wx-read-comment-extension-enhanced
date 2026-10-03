@@ -17,7 +17,7 @@ const dateInfo = new Date().toLocaleString().split(' ')[0].replace(/\//g, '-');
 
 config.plugins = (config.plugins || []).concat(
     new ZipPlugin({
-        filename: `微信读书评论-${dateInfo}.zip`,
+        filename: `微信读书评论增强版-${require('../package.json').version}-${dateInfo}.zip`,
         path: path.join(__dirname, '../'),
     })
 );

@@ -1,18 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "微信读书评论插件",
-  "description": "微信读书评论插件,让支持微信读书PC页面显示评论。A chrome extension show comment on pc WeChatRead",
+  "name": "微信读书评论增强版",
+  "version": "1.2.0",
+  "version_name": "1.2.0-beta.1",
+  "description": "在微信读书网页版显示公开评论划线，支持点击查看想法，并提供可选评论侧栏与正文定位。",
   "background": { "service_worker": "background.bundle.js" },
   "icons": {
     "128": "wxread-icon.png"
   },
   "permissions": [
-    "webRequest"
+    "webRequest",
+    "storage"
   ],
   "host_permissions": [
     "https://weread.qq.com/*"
   ],
   "content_scripts": [
+    {
+      "matches": ["https://weread.qq.com/web/reader/*"],
+      "js": ["pageBridge.bundle.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": ["https://weread.qq.com/web/reader/*"],
       "js": ["contentScript.bundle.js"],
@@ -21,8 +30,11 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content.styles.css", "wxread-icon.png"],
-      "matches": []
+      "resources": [
+        "content.styles.css",
+        "wxread-icon.png"
+      ],
+      "matches": ["https://weread.qq.com/*"]
     }
   ]
 }
