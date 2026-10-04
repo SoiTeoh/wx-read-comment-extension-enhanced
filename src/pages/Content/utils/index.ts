@@ -587,6 +587,7 @@ export const getAllCommentData = async (
         stoppedReason = 'expanded-count';
         continue;
       }
+      stoppedReason = 'hasMore=0';
       break;
     }
     if (newReviewCount === 0) {

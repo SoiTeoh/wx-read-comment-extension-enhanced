@@ -42,14 +42,13 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 }
 .chrex-comment-wrapper {
     flex: 1;
+    min-width: 320px;
+    height: 100vh;
     margin-left: 80px;
     position: relative;
     color: #FFF;
     font-size: 18px;
     overflow: hidden;
-}
-.chrex-comment-wrapper h1 {
-    cursor: pointer;
 }
 
 /* 日间浅色模式 */
@@ -68,15 +67,26 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     color: #000;
 }
 .comment-react-wrapper {
-    position: fixed;
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    padding: 24px 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.wxrc_comment_list {
     width: 100%;
-    height: 100%;
-    padding: 30px 20px 0 0 ;
-    overflow: scroll;
+    box-sizing: border-box;
 }
 .comment-header {
-    font-size: 20px;
+    font-size: 18px;
     margin-bottom: 20px;
+}
+.comment-header h1 {
+    margin: 8px 0;
+    font-size: 18px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
 }
 .wxrc_settings {
     display: flex;
@@ -96,6 +106,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     accent-color: #8f949e;
 }
 .wxrc_settings select {
+    max-width: 100%;
     border: 1px solid rgba(145, 150, 160, .45);
     border-radius: 4px;
     padding: 2px 4px;
@@ -131,23 +142,68 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     border: 1px solid #000;
 }
 
-.github-bar {
-    text-align: center;
+.wxrc_project_link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 10px;
+    font-size: 13px;
 }
-.github-bar img {
-    padding-left: 20px;
-    width: 20px;
-    height: 20px;
+.wxrc_project_link a {
+    color: inherit;
+}
+.wxrc_empty_retry {
+    margin-top: 20px;
+    padding: 10px 12px;
+    border: 1px solid rgba(145, 150, 160, .55);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+.wxrc_empty_state {
+    margin: 24px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #a9aeb8;
+}
+.wr_whiteTheme .wxrc_empty_state {
+    color: #606775;
+}
+.wxrc_empty_retry:focus-visible,
+.comment-react-wrapper .comment-item .comment-item-abstract:focus-visible {
+    outline: 2px solid #879dbb;
+    outline-offset: 2px;
 }
 .comment-react-wrapper .comment-item {
     width: 100%;
+    box-sizing: border-box;
     background: rgba(240,240,242,.1);
     padding: 20px;
     border-radius: 12px;
     margin-bottom: 20px;
     border: 1px solid transparent;
     transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+@media (max-width: 1450px) {
+    .chrex-comment-wrapper {
+        position: fixed;
+        top: 72px;
+        right: 0;
+        bottom: 0;
+        /* Reader's floating controls use z-index: 90. Keep the narrow sidebar above them. */
+        z-index: 100;
+        width: min(420px, calc(100vw - 24px));
+        min-width: 0;
+        height: calc(100vh - 72px);
+        margin-left: 0;
+        background: #24262b;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, .24);
+    }
+    .wr_whiteTheme .chrex-comment-wrapper {
+        background: #f6f7f9;
+    }
 }
 .comment-react-wrapper .comment-item.wxrc_comment_mapped {
     cursor: pointer;
@@ -173,6 +229,21 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 }
 .comment-react-wrapper .wxrc_comment_same_range {
     margin-left: 8px;
+}
+.comment-react-wrapper .wxrc_jump_to_text {
+    border: 0;
+    border-radius: 4px;
+    padding: 2px 4px;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+.comment-react-wrapper .wxrc_jump_to_text:hover {
+    text-decoration: underline;
+}
+.comment-react-wrapper .wxrc_jump_to_text:focus-visible {
+    outline: 2px solid #879dbb;
+    outline-offset: 2px;
 }
 .comment-react-wrapper .comment-item .comment-item-title {
     display: flex;
@@ -211,6 +282,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     font-size: 16px;
     text-align: justify;
     color: #fff;
+    overflow-wrap: anywhere;
     overflow: hidden;
 }
 .comment-react-wrapper .comment-item .comment-item-abstract {
@@ -221,6 +293,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     text-align: justify;
     color: #ddd;
     cursor: pointer;
+    overflow-wrap: anywhere;
     overflow: hidden;
 }
 
@@ -406,4 +479,258 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 .wxrc_public_review_popup_content {
     margin-top: 6px;
     white-space: pre-wrap;
+}
+
+/* Material You-inspired tonal surfaces. Scoped to extension-owned UI only. */
+.chrex-comment-wrapper,
+.wxrc_sidebar_launcher,
+.wxrc_public_review_layer,
+.wxrc_public_review_popup {
+    --wxrc-surface: #171b23;
+    --wxrc-surface-container: #20242e;
+    --wxrc-surface-high: #2b303c;
+    --wxrc-on-surface: #e3e5ef;
+    --wxrc-on-surface-muted: #b6bac9;
+    --wxrc-outline: #454b59;
+    --wxrc-primary: #b6c4f2;
+    --wxrc-on-primary-container: #dce3ff;
+    --wxrc-primary-container: #394765;
+    --wxrc-state: rgba(182, 196, 242, .12);
+}
+.wr_whiteTheme .chrex-comment-wrapper,
+.wr_whiteTheme .wxrc_sidebar_launcher,
+.wr_whiteTheme .wxrc_public_review_layer,
+.wr_whiteTheme .wxrc_public_review_popup {
+    --wxrc-surface: #f8f8ff;
+    --wxrc-surface-container: #f0f1f9;
+    --wxrc-surface-high: #e8eaf5;
+    --wxrc-on-surface: #1a1b21;
+    --wxrc-on-surface-muted: #555b6b;
+    --wxrc-outline: #c4c7d4;
+    --wxrc-primary: #4b5f9c;
+    --wxrc-on-primary-container: #253768;
+    --wxrc-primary-container: #dce3ff;
+    --wxrc-state: rgba(75, 95, 156, .09);
+}
+.chrex-comment-wrapper {
+    background: var(--wxrc-surface);
+    color: var(--wxrc-on-surface);
+}
+.wr_whiteTheme .chrex-comment-wrapper {
+    background: var(--wxrc-surface);
+    color: var(--wxrc-on-surface);
+}
+.comment-react-wrapper {
+    padding: 24px 18px 32px;
+    scrollbar-color: var(--wxrc-outline) transparent;
+}
+.comment-header {
+    margin-bottom: 22px;
+}
+.comment-header h1 {
+    margin: 12px 0 16px;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    color: var(--wxrc-on-surface);
+}
+.wxrc_project_link a {
+    color: var(--wxrc-primary);
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+}
+.wxrc_project_link a:hover {
+    text-decoration-color: currentColor;
+}
+.comment-header button,
+.wr_whiteTheme .comment-react-wrapper .comment-header button,
+.wxrc_empty_retry {
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--wxrc-primary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background-color .16s ease, border-color .16s ease;
+}
+.comment-header button:hover,
+.wxrc_empty_retry:hover {
+    background: var(--wxrc-state);
+    border-color: var(--wxrc-primary);
+}
+.wxrc_settings {
+    gap: 9px 12px;
+    padding: 14px;
+    border-radius: 20px;
+    background: var(--wxrc-surface-container);
+    color: var(--wxrc-on-surface);
+}
+.wr_whiteTheme .wxrc_settings {
+    color: var(--wxrc-on-surface);
+}
+.wxrc_settings label {
+    min-height: 32px;
+    border-radius: 12px;
+    padding: 1px 5px;
+}
+.wxrc_settings label:hover {
+    background: var(--wxrc-state);
+}
+.wxrc_settings input {
+    accent-color: var(--wxrc-primary);
+    width: 16px;
+    height: 16px;
+}
+.wxrc_settings select,
+.wr_whiteTheme .wxrc_settings select {
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 10px;
+    padding: 5px 8px;
+    background: var(--wxrc-surface-high);
+    color: var(--wxrc-on-surface);
+}
+.wxrc_settings_description,
+.wr_whiteTheme .wxrc_settings_description,
+.wxrc_empty_state,
+.wr_whiteTheme .wxrc_empty_state {
+    color: var(--wxrc-on-surface-muted);
+}
+.wxrc_settings_description {
+    padding: 0 3px;
+    line-height: 1.6;
+}
+.comment-react-wrapper .comment-item,
+.wr_whiteTheme .comment-react-wrapper .comment-item {
+    margin-bottom: 12px;
+    padding: 17px 18px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background: var(--wxrc-surface-container);
+    color: var(--wxrc-on-surface);
+}
+.comment-react-wrapper .comment-item.wxrc_comment_mapped:hover {
+    border-color: var(--wxrc-outline);
+    background: var(--wxrc-surface-high);
+}
+.comment-react-wrapper .comment-item.wxrc_comment_active,
+.wr_whiteTheme .comment-react-wrapper .comment-item.wxrc_comment_active {
+    border-color: var(--wxrc-primary);
+    background: var(--wxrc-primary-container);
+    box-shadow: inset 3px 0 0 var(--wxrc-primary);
+}
+.comment-react-wrapper .comment-item.wxrc_comment_active .comment-item-content,
+.comment-react-wrapper .comment-item.wxrc_comment_active .comment-item-abstract,
+.comment-react-wrapper .comment-item.wxrc_comment_active .comment-item-title .name {
+    color: var(--wxrc-on-primary-container);
+}
+.comment-react-wrapper .comment-item .comment-item-title .name,
+.wr_whiteTheme .comment-react-wrapper .comment-item .comment-item-title .name {
+    color: var(--wxrc-on-surface);
+}
+.comment-react-wrapper .comment-item .comment-item-title .time,
+.comment-react-wrapper .wxrc_comment_mapping_status,
+.comment-react-wrapper .wxrc_comment_same_range {
+    color: var(--wxrc-on-surface-muted);
+}
+.comment-react-wrapper .comment-item .comment-item-content,
+.wr_whiteTheme .comment-react-wrapper .comment-item .comment-item-content {
+    color: var(--wxrc-on-surface);
+}
+.comment-react-wrapper .comment-item .comment-item-abstract,
+.wr_whiteTheme .comment-react-wrapper .comment-item .comment-item-abstract {
+    color: var(--wxrc-on-surface-muted);
+}
+.comment-react-wrapper .wxrc_jump_to_text {
+    border-radius: 999px;
+    padding: 4px 8px;
+    color: var(--wxrc-primary);
+}
+.comment-react-wrapper .wxrc_jump_to_text:hover {
+    background: var(--wxrc-state);
+    text-decoration: none;
+}
+.wxrc_sidebar_launcher,
+.wr_whiteTheme .wxrc_sidebar_launcher {
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 999px;
+    padding: 10px 16px;
+    background: var(--wxrc-primary-container);
+    color: var(--wxrc-on-primary-container);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .16);
+    font-weight: 600;
+}
+.wxrc_sidebar_launcher:hover {
+    background: var(--wxrc-surface-high);
+    border-color: var(--wxrc-primary);
+}
+@media (max-width: 1450px) {
+    .chrex-comment-wrapper,
+    .wr_whiteTheme .chrex-comment-wrapper {
+        background: var(--wxrc-surface);
+        box-shadow: -8px 0 28px rgba(0, 0, 0, .2);
+    }
+}
+.wxrc_public_review,
+.wr_whiteTheme .wxrc_public_review {
+    border-bottom-color: var(--wxrc-primary) !important;
+    border-bottom-width: 2px !important;
+}
+.wxrc_public_review_wrapper.wxrc_public_review_hover .wxrc_public_review,
+.wr_whiteTheme .wxrc_public_review_wrapper.wxrc_public_review_hover .wxrc_public_review {
+    border-bottom-color: var(--wxrc-primary) !important;
+    border-bottom-width: 2.5px !important;
+    background: var(--wxrc-state) !important;
+}
+.wxrc_public_review_badge,
+.wr_whiteTheme .wxrc_public_review_badge {
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 999px;
+    background: var(--wxrc-primary-container);
+    color: var(--wxrc-on-primary-container);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .17);
+    font-weight: 700;
+}
+.wxrc_public_review_badge:hover,
+.wxrc_public_review_badge:focus-visible,
+.wr_whiteTheme .wxrc_public_review_badge:hover,
+.wr_whiteTheme .wxrc_public_review_badge:focus-visible {
+    border-color: var(--wxrc-primary);
+    background: var(--wxrc-surface-high);
+    outline: 1px solid var(--wxrc-primary);
+}
+.wxrc_public_review_popup,
+.wr_whiteTheme .wxrc_public_review_popup {
+    padding: 18px;
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 24px;
+    background: var(--wxrc-surface-container);
+    color: var(--wxrc-on-surface);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .25);
+}
+.wxrc_public_review_popup_item + .wxrc_public_review_popup_item {
+    border-top-color: var(--wxrc-outline);
+}
+.wxrc_public_review_popup_toolbar,
+.wr_whiteTheme .wxrc_public_review_popup_toolbar,
+.wxrc_public_review_popup_abstract,
+.wr_whiteTheme .wxrc_public_review_popup_abstract {
+    color: var(--wxrc-on-surface-muted);
+}
+.wxrc_public_review_popup_toolbar button {
+    border-radius: 999px;
+    padding: 5px 10px;
+    color: var(--wxrc-primary);
+}
+.wxrc_public_review_popup_toolbar button:hover {
+    background: var(--wxrc-state);
+}
+@media (prefers-reduced-motion: reduce) {
+    .chrex-comment-wrapper .comment-item,
+    .chrex-comment-wrapper button,
+    .wxrc_sidebar_launcher {
+        transition: none;
+    }
 }

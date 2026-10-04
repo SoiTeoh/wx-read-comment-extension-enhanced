@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "node utils/build.js",
+    "test": "node --test tests/*.test.cjs",
     "start": "node utils/webserver.js",
     "prettier": "prettier --write '**/*.{js,jsx,ts,tsx,json,css,scss,md}'"
   },

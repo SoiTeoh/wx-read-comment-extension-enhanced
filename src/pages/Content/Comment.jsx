@@ -20,10 +20,10 @@ const getMappedRangeStart = (entry, index, reviewSync) => {
 };
 
 const Comment = (props) => {
-  const { list = [], width, isDark, onReload, reviewSync, settings, onSettingChange } = props;
-  const githubUrl = `https://636c-cloud1-5g5eyjtze161c202-1319072486.tcb.qcloud.la/dev/github-${
-    isDark ? 'white' : 'black'
-  }.png`;
+  const {
+    list = [], chapterName = '', loadStatus = 'loading',
+    onReload, reviewSync, settings, onSettingChange,
+  } = props;
   const [expandedReviewIds, setExpandedReviewIds] = useState(() => new Set());
   const commentData = list;
 
@@ -53,24 +53,40 @@ const Comment = (props) => {
     });
   }, []);
 
-  const emptyTip = <h1 onClick={onReload}>点击刷新评论数据</h1>;
+  const emptyTip = loadStatus === 'loading'
+    ? <p className="wxrc_empty_state" role="status">正在加载公开评论…</p>
+    : loadStatus === 'error'
+    ? (
+      <div className="wxrc_empty_state" role="alert">
+        <p>公开评论加载失败。</p>
+        <button className="wxrc_empty_retry" type="button" onClick={onReload}>重试</button>
+      </div>
+    )
+    : <p className="wxrc_empty_state">本章暂无公开评论。</p>;
 
   const firstReview = commentData[0] && getReview(commentData[0]);
   const chapterTitle =
-    firstReview?.chapterName || firstReview?.chapterTitle || '当前章节';
+    chapterName || firstReview?.chapterName || firstReview?.chapterTitle || '当前章节';
 
   const commentList = (
-    <div style={{ width: width - 40 }}>
+    <div className="wxrc_comment_list">
       <div className="comment-header">
-        <div className="github-bar">
+        <div className="wxrc_project_link">
           <a
-            href="https://github.com/my19940202/wx-read-comment-extension"
+            href="https://github.com/SoiTeoh/wx-read-comment-extension-enhanced"
             target="_blank"
             rel="noreferrer"
           >
-            开源不易，求 star 支持
-            <img src={githubUrl} alt="GitHub" />
+            项目说明
           </a>
+          <button
+            className="wxrc_sidebar_close"
+            type="button"
+            onClick={() => onSettingChange?.('showSidebar', false)}
+            aria-label="关闭右侧评论栏"
+          >
+            关闭侧栏
+          </button>
         </div>
         <h1>
           {chapterTitle} · 已加载 {commentData.length} 条公开评论
@@ -151,9 +167,21 @@ const Comment = (props) => {
               <img className="avatar" src={author.avatar} alt="" />
               <span className="name">{author.name}</span>
               <span className="time">{createTime}</span>
-              <span className="wxrc_comment_mapping_status">
-                {mapped ? '可定位' : '暂不可定位'}
-              </span>
+              {mapped ? (
+                <button
+                  className="wxrc_comment_mapping_status wxrc_jump_to_text"
+                  type="button"
+                  aria-label={`定位正文：${author.name || '公开评论'}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    reviewSync.onReviewClick(reviewId);
+                  }}
+                >
+                  定位正文
+                </button>
+              ) : (
+                <span className="wxrc_comment_mapping_status">暂不可定位</span>
+              )}
               {mapped && rangeReviewCount > 1 && (
                 <span className="wxrc_comment_same_range">
                   同段还有 {rangeReviewCount - 1} 条想法
@@ -168,7 +196,17 @@ const Comment = (props) => {
               <div
                 className={expandedReviewIds.has(reviewId) ? expandedClass : collapsedClass}
                 onClick={toggleAbstract}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleAbstract(event);
+                  }
+                }}
                 data-review-id={reviewId}
+                role="button"
+                tabIndex={0}
+                aria-expanded={expandedReviewIds.has(reviewId)}
+                aria-label="展开或收起评论引用原文"
                 dangerouslySetInnerHTML={{ __html: abstract }}
               />
             )}

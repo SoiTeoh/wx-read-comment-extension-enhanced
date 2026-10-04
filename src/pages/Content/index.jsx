@@ -53,12 +53,12 @@ let syncInFlight = false;
 let syncAgain = false;
 let syncAgainForce = false;
 
-const renderComments = (list, width, isDark, onReload, reviewSync, settings, onSettingChange) => {
+const renderComments = (list, chapterName, loadStatus, onReload, reviewSync, settings, onSettingChange) => {
   root.render(
     <Comment
       list={list}
-      width={width}
-      isDark={isDark}
+      chapterName={chapterName}
+      loadStatus={loadStatus}
       onReload={onReload}
       reviewSync={reviewSync}
       settings={settings}
@@ -77,12 +77,8 @@ const start = async () => {
   let settings = await loadSettings();
   setFollowReadingPosition(settings.followReadingPosition);
   setPublicUnderlinesVisible(settings.showPublicUnderlines);
-  const { clientHeight: height, clientWidth: width } = document.documentElement;
-  const commentWidth = Math.round(width - 1000 - 100);
-
   wrapper = document.createElement('div');
   wrapper.className = 'chrex-comment-wrapper';
-  wrapper.style = `height: ${height}px;width: ${commentWidth}px;`;
   appDom.append(wrapper);
   const sidebarLauncher = document.createElement('button');
   sidebarLauncher.type = 'button';
@@ -99,6 +95,9 @@ const start = async () => {
   applySidebarVisibility();
   root = createRoot(wrapper);
   let latestComments = [];
+  let currentChapterName = '';
+  let loadStatus = 'loading';
+  let readyForSync = false;
   let reviewSync = getPublicReviewSyncProps();
   const onSettingChange = (key, value) => {
     if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return;
@@ -121,9 +120,9 @@ const start = async () => {
   const renderLatestComments = () =>
     renderComments(
       latestComments,
-      commentWidth,
-      !document.body.classList.contains('wr_whiteTheme'),
-      () => scheduleSync(true),
+      currentChapterName,
+      loadStatus,
+      () => readyForSync ? scheduleSync(true) : window.location.reload(),
       reviewSync,
       settings,
       onSettingChange
@@ -138,6 +137,8 @@ const start = async () => {
   const book = await resolveBookId();
   if (!book) {
     phase2Log('bookId resolution failed');
+    loadStatus = 'error';
+    renderLatestComments();
     return;
   }
   phase2Log('bookId resolved', book);
@@ -147,8 +148,11 @@ const start = async () => {
     catalog = await getChapterCatalog(book.value);
   } catch (error) {
     phase2Log('chapter catalog request failed', String(error));
+    loadStatus = 'error';
+    renderLatestComments();
     return;
   }
+  readyForSync = true;
   phase2Log('chapter catalog loaded', {
     source: catalog.source,
     chapterCount: catalog.chapters.length,
@@ -167,6 +171,8 @@ const start = async () => {
       const chapter = await resolveCurrentChapter(catalog.chapters);
       if (!chapter) {
         phase2Log('current chapterUid was not resolved');
+        loadStatus = 'error';
+        renderLatestComments();
         return;
       }
       if (!force && chapter.chapterUid === activeChapterUid) {
@@ -178,10 +184,16 @@ const start = async () => {
         wrapper.dataset.chapterUid = chapter.chapterUid;
         delete wrapper.dataset.layoutVersion;
         latestComments = [];
+        loadStatus = 'loading';
         reviewSync = getPublicReviewSyncProps();
         renderLatestComments();
       }
       activeChapterUid = chapter.chapterUid;
+      currentChapterName = chapter.chapterName || '';
+      if (force) {
+        loadStatus = 'loading';
+        renderLatestComments();
+      }
       phase2Log('current chapter resolved', chapter);
 
       const response = await getAllCommentData({
@@ -231,6 +243,7 @@ const start = async () => {
       phase2Log('current chapter review filter proof', proof);
 
       latestComments = filtered;
+      loadStatus = 'ready';
       reviewSync = getPublicReviewSyncProps();
       renderLatestComments();
       const underlineStats = await renderPublicReviewUnderlines(
@@ -260,6 +273,8 @@ const start = async () => {
       renderLatestComments();
     } catch (error) {
       phase2Log('chapter comment sync failed', String(error));
+      loadStatus = 'error';
+      renderLatestComments();
     } finally {
       syncInFlight = false;
       if (syncAgain) {
