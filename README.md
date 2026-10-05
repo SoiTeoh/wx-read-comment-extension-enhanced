@@ -86,6 +86,8 @@ Current status: **Local Beta / v1.2.0-beta.1**。
 
 M1 已加入参考 [Material You 设计说明](https://source.android.com/docs/core/display/material?hl=zh-cn) 的视觉初版：插件侧栏、设置控件、评论卡片、按钮、公开评论虚线、数字 badge 与 popup 使用统一的 tonal palette、圆角和轻量交互反馈，并适配日间／夜间模式。这是插件内固定的两套配色，不会读取系统壁纸或生成 Android 动态色；微信读书原生划线和页面节点保持原样。
 
+2026-10-05 Local Beta 修复：右侧评论栏固定在视口，正文滚动时不再把侧栏整体带出屏幕，列表仍可独立滚动；插件的评论点击命中会让出微信读书原生选择工具栏、菜单和拖选操作。此修复不改变 `range→rect` 映射，也不新增评论写功能。
+
 | 阶段 | 重点 | 完成标准 | 状态 |
 | --- | --- | --- | --- |
 | M0 · 回归基线 | 为章节筛选、分页与构建增加离线测试；记录已知限制 | 测试不依赖登录或真实接口，`npm test`、`tsc --noEmit`、`npm run build` 均通过 | 已完成 |

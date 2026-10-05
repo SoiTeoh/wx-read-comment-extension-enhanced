@@ -41,11 +41,14 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     border-color: #8a9ab8;
 }
 .chrex-comment-wrapper {
-    flex: 1;
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 1080px;
+    z-index: 100;
     min-width: 320px;
     height: 100vh;
-    margin-left: 80px;
-    position: relative;
+    margin-left: 0;
     color: #FFF;
     font-size: 18px;
     overflow: hidden;
@@ -192,6 +195,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
         top: 72px;
         right: 0;
         bottom: 0;
+        left: auto;
         /* Reader's floating controls use z-index: 90. Keep the narrow sidebar above them. */
         z-index: 100;
         width: min(420px, calc(100vw - 24px));

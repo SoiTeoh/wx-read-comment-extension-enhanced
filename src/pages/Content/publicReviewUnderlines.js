@@ -24,6 +24,8 @@ let scrollFrame = 0;
 let hoverFrame = 0;
 let hoverPoint = null;
 let hoveredRangeKey = '';
+let pointerDownPoint = null;
+let pointerDragged = false;
 let scrollListenerInstalled = false;
 let emphasisTimer = 0;
 let activeRangeKey = '';
@@ -329,8 +331,70 @@ const isReaderSurfaceTarget = (target) => {
   );
 };
 
+const NATIVE_READER_CONTROL_SELECTOR = [
+  '.reader_toolbar_container',
+  '.readerControls',
+  '.readerCatalog',
+  '.wr_float_panel_container',
+  '.wr_mask',
+  '.reader-font-control-panel-wrapper',
+  '.reader_float_search_panel_wrapper',
+  '.wr_underline_wrapper:not(.wxrc_public_review_wrapper)',
+  '[role="menu"]',
+  '[role="menuitem"]',
+  '[role="dialog"]',
+  '[aria-modal="true"]',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'a',
+  '[contenteditable]:not([contenteditable="false"])',
+].join(', ');
+
+const isNativeReaderInteraction = (event) => {
+  const path = typeof event.composedPath === 'function'
+    ? event.composedPath()
+    : [event.target];
+  return path.some((node) =>
+    node instanceof Element && node.matches(NATIVE_READER_CONTROL_SELECTOR)
+  );
+};
+
+const hasActiveTextSelection = () => {
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed && selection.toString().trim()) return true;
+  const toolbar = document.querySelector('.reader_toolbar_container');
+  const readerSelection = document.querySelector('.wr_selection');
+  return Boolean(
+    toolbar?.getClientRects().length &&
+    readerSelection?.getClientRects().length &&
+    getComputedStyle(toolbar).visibility !== 'hidden'
+  );
+};
+
+const onDocumentPointerDown = (event) => {
+  pointerDownPoint = event.button === 0
+    ? { x: event.clientX, y: event.clientY }
+    : null;
+  pointerDragged = false;
+};
+
+const onDocumentPointerMoveCapture = (event) => {
+  if (!pointerDownPoint || !(event.buttons & 1)) return;
+  if (
+    Math.abs(event.clientX - pointerDownPoint.x) > 5 ||
+    Math.abs(event.clientY - pointerDownPoint.y) > 5
+  ) pointerDragged = true;
+};
+
 const onDocumentClickCapture = (event) => {
+  const wasDrag = pointerDragged;
+  pointerDownPoint = null;
+  pointerDragged = false;
+  if (wasDrag) return;
   if (event.target instanceof Element && event.target.closest(`.${BADGE_CLASS}`)) return;
+  if (isNativeReaderInteraction(event) || hasActiveTextSelection()) return;
   if (event.button !== 0 || !isReaderSurfaceTarget(event.target)) return;
   const group = getRangeAtClientPoint(event.clientX, event.clientY);
   if (!group || isNativeUnderlineAt(event.clientX, event.clientY)) return;
@@ -595,6 +659,8 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
   initialized = true;
   window.addEventListener('message', onPageMessage);
   window.addEventListener('resize', () => invalidatePublicReviewLayout('resize'));
+  document.addEventListener('pointerdown', onDocumentPointerDown, true);
+  document.addEventListener('pointermove', onDocumentPointerMoveCapture, true);
   document.addEventListener('click', onDocumentClickCapture, true);
   document.addEventListener('pointermove', onDocumentPointerMove, { passive: true });
   updateSidebarScrollListener();
