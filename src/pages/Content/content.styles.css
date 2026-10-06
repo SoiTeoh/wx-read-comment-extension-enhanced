@@ -409,6 +409,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 .wxrc_public_review_popup {
     position: fixed;
     z-index: 2147483647;
+    box-sizing: border-box;
     width: min(360px, calc(100vw - 24px));
     max-height: min(480px, calc(100vh - 24px));
     overflow: auto;
@@ -696,6 +697,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     color: var(--wxrc-on-primary-container);
     box-shadow: 0 2px 6px rgba(0, 0, 0, .17);
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 .wxrc_public_review_badge:hover,
 .wxrc_public_review_badge:focus-visible,
@@ -730,6 +732,11 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 }
 .wxrc_public_review_popup_toolbar button:hover {
     background: var(--wxrc-state);
+}
+.wxrc_public_review_popup_toolbar button:focus-visible,
+.wxrc_public_review_badge:focus-visible {
+    outline: 2px solid var(--wxrc-primary);
+    outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
     .chrex-comment-wrapper .comment-item,

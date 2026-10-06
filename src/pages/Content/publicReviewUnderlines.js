@@ -1,5 +1,6 @@
 import { getReview } from './utils';
 import { debugLog } from './debug';
+import { badgeWidthForCount, positionBadge, positionPopup } from './popupBadgeLayout';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -34,6 +35,7 @@ let followReadingPosition = true;
 let showPublicUnderlines = true;
 let sidebarVisible = true;
 let publicReviewIndex = createEmptyIndex();
+let popupReturnFocus = null;
 
 function createEmptyIndex(chapterUid = '') {
   return {
@@ -54,8 +56,13 @@ const createRequestId = () =>
     .toString(36)
     .slice(2, 8)}`;
 
-const removePopup = () => {
+const removePopup = (restoreFocus = false) => {
   document.querySelectorAll(`.${POPUP_CLASS}`).forEach((node) => node.remove());
+  const returnFocus = popupReturnFocus;
+  popupReturnFocus = null;
+  if (restoreFocus && returnFocus?.isConnected) {
+    returnFocus.focus({ preventScroll: true });
+  }
 };
 
 export const clearPublicUnderlines = () => {
@@ -211,10 +218,17 @@ const appendTextBlock = (parent, className, text) => {
 
 const showPopup = (event, reviews) => {
   removePopup();
+  const trigger = event.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : event.currentTarget ? null : document.activeElement;
+  popupReturnFocus = trigger instanceof HTMLElement &&
+    trigger.matches(`.${BADGE_CLASS}, .wxrc_public_review_wrapper`)
+    ? trigger : null;
   const popup = document.createElement('div');
   popup.className = POPUP_CLASS;
   popup.setAttribute('role', 'dialog');
   popup.setAttribute('aria-label', '公开评论');
+  popup.setAttribute('aria-modal', 'false');
   const toolbar = document.createElement('div');
   toolbar.className = 'wxrc_public_review_popup_toolbar';
   const count = document.createElement('span');
@@ -223,7 +237,7 @@ const showPopup = (event, reviews) => {
   close.type = 'button';
   close.textContent = '关闭';
   close.setAttribute('aria-label', '关闭公开评论');
-  close.addEventListener('click', removePopup);
+  close.addEventListener('click', () => removePopup(true));
   toolbar.append(count, close);
   popup.appendChild(toolbar);
 
@@ -248,18 +262,15 @@ const showPopup = (event, reviews) => {
   }
 
   document.body.appendChild(popup);
-  const margin = 12;
   const popupRect = popup.getBoundingClientRect();
-  const left = Math.min(
-    event.clientX + margin,
-    window.innerWidth - popupRect.width - margin
+  const position = positionPopup(
+    { x: event.clientX, y: event.clientY },
+    { width: popupRect.width, height: popupRect.height },
+    { width: window.innerWidth, height: window.innerHeight }
   );
-  const top = Math.min(
-    event.clientY + margin,
-    window.innerHeight - popupRect.height - margin
-  );
-  popup.style.left = `${Math.max(margin, left)}px`;
-  popup.style.top = `${Math.max(margin, top)}px`;
+  popup.style.left = `${position.left}px`;
+  popup.style.top = `${position.top}px`;
+  close.focus({ preventScroll: true });
 };
 
 const openGroupPopup = (event, group) => {
@@ -452,7 +463,7 @@ const createUnderline = (rect, group) => {
   return wrapper;
 };
 
-const createOverlapBadge = (group, canvasWidth, placedBadges) => {
+const createOverlapBadge = (group, canvasSize, placedBadges) => {
   const lastRect = group.rects.reduce((last, rect) =>
     !last || rect.y > last.y || (rect.y === last.y && rect.x > last.x)
       ? rect : last, null);
@@ -464,20 +475,17 @@ const createOverlapBadge = (group, canvasWidth, placedBadges) => {
   badge.textContent = String(group.reviews.length);
   badge.title = `查看 ${group.reviews.length} 条公开想法`;
   badge.setAttribute('aria-label', badge.title);
-  const x = Math.max(0, Math.min(canvasWidth - 22, lastRect.x + lastRect.w + 3));
-  let y = lastRect.y + lastRect.h / 2 - 9;
-  while (placedBadges.some((placed) =>
-    x < placed.x + 22 && x + 22 > placed.x &&
-    y < placed.y + 20 && y + 20 > placed.y
-  )) y += 20;
-  placedBadges.push({ x, y });
-  badge.style.left = `${x}px`;
-  badge.style.top = `${y}px`;
+  const width = badgeWidthForCount(group.reviews.length);
+  const position = positionBadge(lastRect, canvasSize, { width, height: 18 }, placedBadges);
+  placedBadges.push(position);
+  badge.style.left = `${position.x}px`;
+  badge.style.top = `${position.y}px`;
+  badge.style.width = `${width}px`;
   badge.addEventListener('click', (event) => openGroupPopup(event, group));
   return badge;
 };
 
-const appendOverlapBadges = (index, layer, container, canvasWidth) => {
+const appendOverlapBadges = (index, layer, container, canvasSize) => {
   const canvasBox = container.getBoundingClientRect();
   const nativeRects = Array.from(document.querySelectorAll(
     '.wr_underline_wrapper:not(.wxrc_public_review_wrapper)'
@@ -497,7 +505,7 @@ const appendOverlapBadges = (index, layer, container, canvasWidth) => {
       Math.min(rect.y + rect.h, native.bottom) - Math.max(rect.y, native.top) > 2
     ));
     if (!overlaps) continue;
-    const badge = createOverlapBadge(group, canvasWidth, placedBadges);
+    const badge = createOverlapBadge(group, canvasSize, placedBadges);
     if (badge) layer.appendChild(badge);
   }
 };
@@ -673,8 +681,13 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
     }
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') removePopup();
+    if (event.key === 'Escape' && document.querySelector(`.${POPUP_CLASS}`)) {
+      event.preventDefault();
+      event.stopPropagation();
+      removePopup(true);
+    }
   });
+  window.addEventListener('scroll', () => removePopup(), { passive: true });
 };
 
 export const invalidatePublicReviewLayout = (reason) => {
@@ -839,7 +852,10 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
     }
     publicReviewIndex = nextIndex;
     overlayHost.appendChild(layer);
-    appendOverlapBadges(nextIndex, layer, container, containerRect.width);
+    appendOverlapBadges(nextIndex, layer, container, {
+      width: containerRect.width,
+      height: containerRect.height,
+    });
     scheduleScrollSync();
     window.setTimeout(scheduleScrollSync, 0);
 
