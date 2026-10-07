@@ -584,7 +584,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 .wxrc_settings label:hover {
     background: var(--wxrc-state);
 }
-.wxrc_settings input {
+.wxrc_settings input[type="checkbox"] {
     accent-color: var(--wxrc-primary);
     width: 16px;
     height: 16px;
@@ -744,4 +744,25 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     .wxrc_sidebar_launcher {
         transition: none;
     }
+}
+.wxrc_browse_controls input[type="search"] {
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 10px;
+    background: var(--wxrc-surface-container);
+    color: var(--wxrc-on-surface);
+}
+.wxrc_browse_controls label:first-child {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+}
+.comment-react-wrapper .wxrc_comment_list[data-density="compact"] .comment-item {
+    margin-bottom: 6px;
+    padding: 10px 12px;
+    border-radius: 12px;
 }

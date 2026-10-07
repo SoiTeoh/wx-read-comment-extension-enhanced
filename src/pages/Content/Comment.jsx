@@ -4,6 +4,16 @@ import { getFormattedDate, getReview } from './utils';
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
 
+export const matchesCommentFilter = (entry, mapped, query, mappingFilter) => {
+  if (mappingFilter === 'mapped' && !mapped) return false;
+  if (mappingFilter === 'unmapped' && mapped) return false;
+  const review = getReview(entry);
+  const text = [review.content, review.abstract, review.author?.name]
+    .map((value) => String(value || '').replace(/<[^>]*>/g, ' '))
+    .join(' ').toLocaleLowerCase();
+  return !query.trim() || text.includes(query.trim().toLocaleLowerCase());
+};
+
 const getReviewId = (entry, index) => {
   const review = getReview(entry);
   return String(review.reviewId || entry.reviewId || index);
@@ -25,22 +35,29 @@ const Comment = (props) => {
     onReload, reviewSync, settings, onSettingChange,
   } = props;
   const [expandedReviewIds, setExpandedReviewIds] = useState(() => new Set());
+  const [query, setQuery] = useState('');
+  const [mappingFilter, setMappingFilter] = useState('all');
   const commentData = list;
 
   useEffect(() => {
     setExpandedReviewIds(new Set());
   }, [list]);
 
+  useEffect(() => {
+    setQuery('');
+    setMappingFilter('all');
+  }, [reviewSync?.chapterUid]);
+
   const displayedComments = useMemo(() => {
     const indexed = commentData.map((entry, index) => ({
         entry,
         index,
         start: getMappedRangeStart(entry, index, reviewSync),
-      }));
+      })).filter(({ entry, start }) => matchesCommentFilter(entry, Number.isFinite(start), query, mappingFilter));
     return settings?.sortOrder === 'api'
       ? indexed
       : indexed.sort((a, b) => a.start - b.start || a.index - b.index);
-  }, [commentData, reviewSync, settings?.sortOrder]);
+  }, [commentData, reviewSync, settings?.sortOrder, query, mappingFilter]);
 
   const toggleAbstract = useCallback((event) => {
     event.stopPropagation();
@@ -69,7 +86,7 @@ const Comment = (props) => {
     chapterName || firstReview?.chapterName || firstReview?.chapterTitle || '当前章节';
 
   const commentList = (
-    <div className="wxrc_comment_list">
+    <div className="wxrc_comment_list" data-density={settings?.commentDensity === 'compact' ? 'compact' : 'comfortable'}>
       <div className="comment-header">
         <div className="wxrc_project_link">
           <a
@@ -132,8 +149,29 @@ const Comment = (props) => {
           仅展示接口返回的公开评论和公开想法。带有特殊样式的划线可点击查看公开想法。
           微信读书原生划线会保持不变，但原生划线不一定有公开评论，因此部分划线无法点击。
         </p>
+        <div className="wxrc_settings wxrc_browse_controls" role="group" aria-label="评论浏览">
+          <label>搜索评论、引用或作者
+            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <label>定位状态
+            <select value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
+              <option value="all">全部评论</option>
+              <option value="mapped">可定位</option>
+              <option value="unmapped">暂不可定位</option>
+            </select>
+          </label>
+          <label>显示密度
+            <select value={settings?.commentDensity === 'compact' ? 'compact' : 'comfortable'} onChange={(event) => onSettingChange?.('commentDensity', event.target.value)}>
+              <option value="comfortable">舒适</option>
+              <option value="compact">紧凑</option>
+            </select>
+          </label>
+          <button type="button" disabled={!query && mappingFilter === 'all'} onClick={() => { setQuery(''); setMappingFilter('all'); }}>清除筛选</button>
+        </div>
+        <p className="wxrc_settings_description" role="status">显示 {displayedComments.length} / {commentData.length} 条；筛选仅作用于侧栏。</p>
       </div>
       {commentData.length === 0 && emptyTip}
+      {commentData.length > 0 && displayedComments.length === 0 && <p className="wxrc_empty_state">没有符合筛选条件的评论。清除筛选可查看全部已加载评论。</p>}
       {displayedComments.map(({ entry, index }) => {
         const item = getReview(entry);
         const reviewId = getReviewId(entry, index);

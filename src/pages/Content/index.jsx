@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   showPublicUnderlines: true,
   showSidebar: true,
   sortOrder: 'reading',
+  commentDensity: 'comfortable',
 };
 
 const loadSettings = async () => {
@@ -38,6 +39,7 @@ const loadSettings = async () => {
       showPublicUnderlines: stored?.showPublicUnderlines !== false,
       showSidebar: stored?.showSidebar !== false,
       sortOrder: stored?.sortOrder === 'api' ? 'api' : 'reading',
+      commentDensity: stored?.commentDensity === 'compact' ? 'compact' : 'comfortable',
     };
   } catch (error) {
     console.warn('[WxReadComments][Phase6] settings load failed', String(error));
@@ -103,7 +105,8 @@ const start = async () => {
     if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return;
     settings = {
       ...settings,
-      [key]: key === 'sortOrder' ? (value === 'api' ? 'api' : 'reading') : Boolean(value),
+      [key]: key === 'sortOrder' ? (value === 'api' ? 'api' : 'reading')
+        : key === 'commentDensity' ? (value === 'compact' ? 'compact' : 'comfortable') : Boolean(value),
     };
     setFollowReadingPosition(settings.followReadingPosition);
     setPublicUnderlinesVisible(settings.showPublicUnderlines);

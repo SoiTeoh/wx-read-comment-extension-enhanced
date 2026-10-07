@@ -23,6 +23,35 @@ componentModule.require = (name) => name === './utils'
   : require(name);
 componentModule._compile(compiled, sourcePath);
 const Comment = componentModule.exports.default;
+const { matchesCommentFilter } = componentModule.exports;
+
+test('M3 筛选匹配正文、引用和作者，清除后完整恢复且不修改源数据', () => {
+  const entries = [
+    { review: { content: '<b>Hello</b>', abstract: '引用文字', author: { name: '读者甲' } } },
+    { content: '另一条' },
+  ];
+  const before = JSON.stringify(entries);
+  for (const query of [' hello ', '引用', '读者甲']) {
+    assert.equal(matchesCommentFilter(entries[0], true, query, 'all'), true);
+  }
+  assert.equal(matchesCommentFilter(entries[0], true, '不存在', 'all'), false);
+  assert.equal(matchesCommentFilter(entries[0], true, '', 'unmapped'), false);
+  assert.equal(matchesCommentFilter(entries[1], false, '', 'mapped'), false);
+  assert.equal(matchesCommentFilter(entries[1], false, '', 'unmapped'), true);
+  assert.equal(entries.filter((entry) => matchesCommentFilter(entry, false, '', 'all')).length, 2);
+  assert.equal(JSON.stringify(entries), before);
+});
+
+test('M3 密度不截断长评论且保留浏览控件', () => {
+  const content = '完整长评论'.repeat(100);
+  const html = renderToStaticMarkup(React.createElement(Comment, {
+    list: [{ content }], settings: { commentDensity: 'compact' }, loadStatus: 'ready',
+  }));
+  assert.match(html, /data-density="compact"/);
+  assert.match(html, /搜索评论、引用或作者/);
+  assert.match(html, /显示 1 \/ 1 条/);
+  assert.ok(html.includes(content));
+});
 
 const reviews = [
   { review: { reviewId: 'mapped', range: '10-20', abstract: '可定位原文', content: '公开想法', author: { name: '读者甲' } } },

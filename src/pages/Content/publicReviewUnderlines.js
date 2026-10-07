@@ -457,7 +457,7 @@ const createUnderline = (rect, group) => {
         stopPropagation: () => event.stopPropagation(),
         clientX: box.left + box.width / 2,
         clientY: box.bottom,
-      });
+      }, group);
     }
   });
   return wrapper;
