@@ -13,17 +13,23 @@ delete config.chromeExtensionBoilerplate;
 
 config.mode = 'production';
 
-const dateInfo = new Date().toLocaleString().split(' ')[0].replace(/\//g, '-');
-
 config.plugins = (config.plugins || []).concat(
     new ZipPlugin({
-        filename: `微信读书评论增强版-${require('../package.json').version}-${dateInfo}.zip`,
+        filename: `wx-read-comment-extension-enhanced-v${require('../package.json').version}.zip`,
         path: path.join(__dirname, '../'),
     })
 );
 
 // 和命令行运行 env NODE_ENV=production webpack 一样的效果
 // 有时候执行失败 有没有报错 执行 NODE_ENV=production webpack --progress 看下具体过程
-webpack(config, function (err) {
-    if (err) console.log('build error', err);
+webpack(config, function (err, stats) {
+    if (err) {
+        console.error('build error', err);
+        process.exitCode = 1;
+    } else if (stats.hasErrors()) {
+        console.error(stats.toString({ all: false, errors: true }));
+        process.exitCode = 1;
+    } else {
+        console.log('Build and release ZIP completed successfully.');
+    }
 });
