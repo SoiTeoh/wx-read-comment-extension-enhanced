@@ -176,3 +176,18 @@ test('M5 请求前异步章节检查失败时不发评论请求', async (t) => {
   assert.equal(result.pageCount, 0);
   assert.equal(result.paginationStoppedReason, 'chapter-changed');
 });
+
+test('I1 退出纵向的 AbortSignal 取消在途评论请求，不开始下一页', async (t) => {
+  const controller = new AbortController();
+  let requests = 0;
+  t.mock.method(global, 'fetch', async (_url, options) => {
+    requests++;
+    assert.equal(options.signal, controller.signal);
+    return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new DOMException('Mode exited', 'AbortError')), { once: true }));
+  });
+  const pending = getAllCommentData({ bookId: 'book', chapterUid: 12 }, async () => true, controller.signal);
+  await new Promise(resolve => setImmediate(resolve));
+  controller.abort();
+  await assert.rejects(pending, error => error.name === 'AbortError');
+  assert.equal(requests, 1);
+});

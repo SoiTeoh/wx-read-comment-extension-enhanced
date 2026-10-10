@@ -9,6 +9,7 @@ import {
   phase2Log,
   resolveBookId,
   resolveCurrentChapter,
+  resolveReaderMode,
 } from './utils';
 import './content.styles.css';
 import {
@@ -21,6 +22,7 @@ import {
   setFollowReadingPosition,
   setPublicUnderlinesVisible,
   setSidebarVisible,
+  setPublicReviewEnabled,
 } from './publicReviewUnderlines';
 
 const SETTINGS_KEY = 'wxrc_phase6_settings';
@@ -48,15 +50,7 @@ const loadSettings = async () => {
   }
 };
 
-let root;
-let wrapper;
-let syncTimer;
-let scheduledSyncForce = false;
-let syncInFlight = false;
-let syncAgain = false;
-let syncAgainForce = false;
-
-const renderComments = (list, chapterName, loadStatus, onReload, reviewSync, settings, onSettingChange) => {
+const renderComments = (root, list, chapterName, loadStatus, onReload, reviewSync, settings, onSettingChange) => {
   root.render(
     <Comment
       list={list}
@@ -70,10 +64,25 @@ const renderComments = (list, chapterName, loadStatus, onReload, reviewSync, set
   );
 };
 
-const start = async () => {
+const start = async (session) => {
+  let root, wrapper, syncTimer;
+  let scheduledSyncForce = false, syncInFlight = false, syncAgain = false, syncAgainForce = false;
+  const live = () => session.active && !document.querySelector('.readerControls_item.isHorizontalReader');
+  const stillVertical = async () => live() && await resolveReaderMode() === 'vertical' && live();
+  const onDispose = cleanup => session.cleanups.push(cleanup);
+  const abortController = new AbortController();
+  onDispose(() => {
+    abortController.abort();
+    window.clearTimeout(syncTimer);
+    root?.unmount();
+    wrapper?.remove();
+    document.body.classList.remove('wxrc_sidebar_visible');
+  });
   const appDom = document.getElementById('app');
 
   let settings = await loadSettings();
+  if (!live()) return;
+  setPublicReviewEnabled(true);
   setFollowReadingPosition(settings.followReadingPosition);
   setPublicUnderlinesVisible(settings.showPublicUnderlines);
   wrapper = document.createElement('div');
@@ -85,6 +94,7 @@ const start = async () => {
   sidebarLauncher.textContent = '公开评论';
   sidebarLauncher.title = '显示右侧评论栏';
   document.body.appendChild(sidebarLauncher);
+  onDispose(() => sidebarLauncher.remove());
   const applySidebarVisibility = () => {
     wrapper.hidden = !settings.showSidebar;
     sidebarLauncher.hidden = settings.showSidebar;
@@ -100,6 +110,7 @@ const start = async () => {
   let remapRequested = false;
   let reviewSync = getPublicReviewSyncProps();
   const onSettingChange = (key, value) => {
+    if (!live()) return;
     if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return;
     settings = {
       ...settings,
@@ -119,7 +130,8 @@ const start = async () => {
   };
   sidebarLauncher.addEventListener('click', () => onSettingChange('showSidebar', true));
   const renderLatestComments = () =>
-    renderComments(
+    live() && renderComments(
+      root,
       latestComments,
       currentChapterName,
       loadStatus,
@@ -134,6 +146,7 @@ const start = async () => {
     );
   renderLatestComments();
   initializePublicReviewUnderlines(() => {
+    if (!live()) return;
     reviewSync = getPublicReviewSyncProps();
     renderLatestComments();
     remapRequested = true;
@@ -141,10 +154,12 @@ const start = async () => {
   });
 
   await probePublicReviewCompatibility();
+  if (!live()) return;
   reviewSync = getPublicReviewSyncProps();
   renderLatestComments();
 
   const book = await resolveBookId();
+  if (!live()) return;
   if (!book) {
     phase2Log('bookId resolution failed');
     loadStatus = 'error';
@@ -152,10 +167,13 @@ const start = async () => {
     return;
   }
   phase2Log('bookId resolved', book);
+  session.bookId = book.value;
+  wrapper.dataset.bookId = book.value;
 
   let catalog;
   try {
     catalog = await getChapterCatalog(book.value);
+    if (!live()) return;
   } catch (error) {
     phase2Log('chapter catalog request failed', String(error));
     loadStatus = 'error';
@@ -171,9 +189,10 @@ const start = async () => {
   let activeChapterUid = '';
 
   const mapCurrentReviews = async (chapter) => {
+    if (!(await stillVertical())) return;
     const stats = await renderPublicReviewUnderlines(latestComments, chapter.chapterUid);
     const current = await resolveCurrentChapter(catalog.chapters);
-    if (stats?.staleDiscarded || current?.chapterUid !== chapter.chapterUid) return;
+    if (!live() || stats?.staleDiscarded || current?.chapterUid !== chapter.chapterUid) return;
     wrapper.dataset.chapterUid = chapter.chapterUid;
     wrapper.dataset.layoutVersion = String(stats.layoutVersion ?? '');
     wrapper.dataset.mappedRangeCount = String(stats.mappedRangeCount);
@@ -185,6 +204,7 @@ const start = async () => {
   };
 
   const syncCurrentChapter = async (force = false) => {
+    if (!live()) return;
     if (syncInFlight) {
       syncAgain = true;
       syncAgainForce = syncAgainForce || force;
@@ -192,7 +212,9 @@ const start = async () => {
     }
     syncInFlight = true;
     try {
+      if (!(await stillVertical())) return;
       const chapter = await resolveCurrentChapter(catalog.chapters);
+      if (!live()) return;
       if (!chapter) {
         phase2Log('current chapterUid was not resolved');
         loadStatus = 'error';
@@ -213,7 +235,10 @@ const start = async () => {
       if (chapter.chapterUid !== activeChapterUid) {
         clearPublicReviewState(chapter.chapterUid);
         wrapper.dataset.chapterUid = chapter.chapterUid;
-        delete wrapper.dataset.layoutVersion;
+        for (const key of ['layoutVersion', 'reviewPageCount', 'reviewCount', 'chapterTotalCount',
+          'paginationStoppedReason', 'mappedRangeCount', 'failedRangeCount', 'mappingCallCounts', 'compatibility']) {
+          delete wrapper.dataset[key];
+        }
         latestComments = [];
         loadStatus = 'loading';
         reviewSync = getPublicReviewSyncProps();
@@ -231,8 +256,10 @@ const start = async () => {
         bookId: book.value,
         chapterUid: chapter.chapterUid,
         listType: 8,
-      }, async () => activeChapterUid === chapter.chapterUid &&
-        (await resolveCurrentChapter(catalog.chapters))?.chapterUid === chapter.chapterUid);
+      }, async () => await stillVertical() && activeChapterUid === chapter.chapterUid &&
+        (await resolveCurrentChapter(catalog.chapters))?.chapterUid === chapter.chapterUid,
+      abortController.signal);
+      if (!(await stillVertical())) return;
       const filtered = filterReviewsByChapterUid(response, chapter.chapterUid);
       const allReviews = response.reviews || [];
       const missingChapterUid = allReviews.filter(
@@ -240,7 +267,7 @@ const start = async () => {
       );
 
       const currentAfterRequest = await resolveCurrentChapter(catalog.chapters);
-      if (currentAfterRequest?.chapterUid !== chapter.chapterUid) {
+      if (!live() || currentAfterRequest?.chapterUid !== chapter.chapterUid) {
         phase2Log('discarded stale chapter review response', {
           requestChapterUid: chapter.chapterUid,
           currentChapterUid: currentAfterRequest?.chapterUid || '',
@@ -280,12 +307,13 @@ const start = async () => {
       renderLatestComments();
       await mapCurrentReviews(chapter);
     } catch (error) {
+      if (!live()) return;
       phase2Log('chapter comment sync failed', String(error));
       loadStatus = 'error';
       renderLatestComments();
     } finally {
       syncInFlight = false;
-      if (syncAgain) {
+      if (live() && syncAgain) {
         syncAgain = false;
         const rerunForce = syncAgainForce;
         syncAgainForce = false;
@@ -295,7 +323,7 @@ const start = async () => {
   };
 
   function scheduleSync(force = false) {
-    if (!readyForSync) return;
+    if (!live() || !readyForSync) return;
     scheduledSyncForce = scheduledSyncForce || force;
     window.clearTimeout(syncTimer);
     syncTimer = window.setTimeout(() => {
@@ -306,9 +334,11 @@ const start = async () => {
   }
 
   await syncCurrentChapter();
+  if (!live()) return;
 
   let lastBodyClassName = document.body.className;
   const observer = new MutationObserver((mutations) => {
+    if (!live()) return;
     const bodyClassChanged = mutations.some(
       (mutation) =>
         mutation.type === 'attributes' &&
@@ -339,14 +369,58 @@ const start = async () => {
     characterData: true,
     subtree: true,
   });
-  window.addEventListener('popstate', () => scheduleSync());
-  window.addEventListener('hashchange', () => scheduleSync());
-  window.addEventListener('scroll', () => scheduleSync(), true);
-  window.setInterval(() => scheduleSync(), 1000);
+  onDispose(() => observer.disconnect());
+  const schedule = () => scheduleSync();
+  for (const event of ['popstate', 'hashchange', 'scroll']) {
+    window.addEventListener(event, schedule, event === 'scroll');
+    onDispose(() => window.removeEventListener(event, schedule, event === 'scroll'));
+  }
+  const interval = window.setInterval(schedule, 1000);
+  onDispose(() => window.clearInterval(interval));
+};
+
+const manageReadingMode = () => {
+  let session = null;
+  let checking = false;
+  const disposeSession = () => {
+    if (!session) return;
+    session.active = false;
+    setPublicReviewEnabled(false);
+    for (const cleanup of session.cleanups.splice(0).reverse()) cleanup();
+    session = null;
+  };
+  const applyMode = mode => {
+    if (mode !== 'vertical') {
+      disposeSession();
+      return;
+    }
+    if (session) return;
+    session = { active: true, cleanups: [] };
+    void start(session).catch(error => console.warn('[WxReadComments] initialization failed', String(error)));
+  };
+  const check = async () => {
+    // Native mode controls let us tear down synchronously on a DOM mode switch.
+    if (document.querySelector('.readerControls_item.isHorizontalReader')) applyMode('horizontal');
+    if (checking) return;
+    checking = true;
+    try { applyMode(await resolveReaderMode()); } finally { checking = false; }
+  };
+  setPublicReviewEnabled(false);
+  window.addEventListener('message', event => {
+    if (event.source === window && event.data?.source === 'WXRC_PAGE' && event.data.type === 'READER_MODE_CHANGED') {
+      if (session?.bookId && event.data.bookId && session.bookId !== event.data.bookId) disposeSession();
+      void check();
+    }
+  });
+  new MutationObserver(() => {
+    if (session && document.querySelector('.readerControls_item.isHorizontalReader')) applyMode('horizontal');
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  window.setInterval(() => void check(), 1000);
+  void check();
 };
 
 if (document.readyState === 'complete') {
-  void start();
+  manageReadingMode();
 } else {
-  window.addEventListener('load', () => void start(), { once: true });
+  window.addEventListener('load', manageReadingMode, { once: true });
 }

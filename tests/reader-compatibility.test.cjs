@@ -15,10 +15,9 @@ helper._compile(compile('readerCompatibility.js'), modulePath);
 const baselineHelper = new Module(modulePath, module);
 baselineHelper._compile(compile('nativeOperationBaseline.js'), modulePath);
 Object.assign(helper.exports, baselineHelper.exports);
-const horizontalHelper = new Module(modulePath, module);
-horizontalHelper.require = () => helper.exports;
-horizontalHelper._compile(compile('horizontalReaderAdapter.js'), modulePath);
-Object.assign(helper.exports, horizontalHelper.exports);
+const modeHelper = new Module(modulePath, module);
+modeHelper._compile(compile('readerMode.js'), modulePath);
+Object.assign(helper.exports, modeHelper.exports);
 const { detectReaderCapabilities, captureReaderRenderContents } = helper.exports;
 const bridgeCode = compile('pageBridge.js');
 
@@ -96,102 +95,91 @@ const harness = (reader, { canvas = true, frozenWebpack = false, useModuleCache 
   return { window, send, map, sent, tick: () => timers[0](), replaceReader: value => { reader = value; } };
 };
 
-test('I1 modern webpack entry discovers horizontal Reader and native tools without module IDs', () => {
+test('I1 horizontal mode is read-only and rejects mapping even through modern runtime discovery', () => {
   const reader = createHorizontalReader();
-  const h = harness(reader, { nativeTools: horizontalTools, useModuleCache: true, modernWebpack: true });
-  assert.equal(h.send('GET_CAPABILITIES').capabilities.code, 'READY');
-  const result = h.map();
-  assert.equal(result.results[0].matchedObjectCount, 1);
-  assert.equal(result.results[0].rects[0].x, 10);
-  assert.equal(reader.selected, undefined);
-  assert.equal(h.map().layoutVersion, result.layoutVersion);
+  const before = Object.getOwnPropertyDescriptors(reader);
+  const h = harness(reader, { useModuleCache: true, modernWebpack: true });
+  assert.equal(h.send('GET_READER_MODE').mode, 'horizontal');
+  assert.equal(h.send('GET_CAPABILITIES').capabilities.code, 'READING_MODE_DISABLED');
+  assert.equal(h.map().errorCode, 'READING_MODE_DISABLED');
+  assert.equal(h.send('GET_READER_INTERACTION_CONTEXT').context, null);
+  assert.deepEqual(Object.getOwnPropertyDescriptors(reader), before);
 });
 
-test('I1 selection preserves the right-page chapter and invalidates on page, book and clear changes', () => {
-  const reader = createHorizontalReader();
-  const h = harness(reader, { nativeTools: horizontalTools });
+const selectableReader = () => ({
+  ...createReader(), bookId: '123',
+  getTextFromObjs: (objects, options) => objects.filter(options.filter).map(o => o.text).join(''),
+  selectObjs() { return 'native-result'; }, clearSelection() {},
+  showSelectionToolBar() { return 'native-toolbar'; },
+});
+
+test('I1 vertical native selection retains original behavior and invalidates after layout, book and chapter changes', () => {
+  const reader = selectableReader();
+  const h = harness(reader);
   const context = () => h.send('GET_READER_INTERACTION_CONTEXT').context;
-  assert.equal(context().mode, 'horizontal');
-  assert.equal(reader.selectObjs([reader.contents[1]]), 'native-result');
-  assert.equal(context().selection.chapterUid, '13');
+  assert.equal(context().mode, 'vertical');
+  const objects = [contentObject(12, 0, 10)];
+  assert.equal(reader.showSelectionToolBar({ objs: objects }), 'native-toolbar');
   assert.equal(context().selection.text, '原文');
   reader.clearSelection();
   assert.equal(context().selection, null);
-  reader.selectObjs([reader.contents[1]]);
-  reader.setCurrentChapterRenderContents();
+  assert.equal(reader.selectObjs(objects), 'native-result');
+  reader.renderContentsVersion++;
   assert.equal(context().selection, null);
-  reader.selectObjs([reader.contents[0]]);
-  reader.bookId = '456';
+  reader.selectObjs(objects); reader.bookId = '456';
   assert.equal(context().selection, null);
-  reader.selectObjs(reader.contents);
-  assert.equal(context().selection, null, 'cross-chapter selections must fail closed');
+  reader.selectObjs(objects); reader.currentChapterUid = '13';
+  assert.equal(context().selection, null);
+  reader.selectObjs(objects);
+  assert.equal(context().selection, null);
 });
 
-test('I1 page signature changes mapping even when native render version remains constant', () => {
-  const reader = createHorizontalReader();
-  const h = harness(reader, { nativeTools: horizontalTools });
-  const first = h.map();
-  reader.leftRenderPageIdx += 2;
-  reader.contents = [contentObject(12, 0, 80)];
-  const next = h.map();
-  assert.ok(next.layoutVersion > first.layoutVersion);
-  assert.equal(next.results[0].rects[0].x, 80);
-});
-
-test('I1 replacing a detached Reader restores hooks and never reuses old native content', () => {
-  const reader = createHorizontalReader();
-  const original = reader.selectObjs;
-  const h = harness(reader, { nativeTools: horizontalTools });
+test('I1 detached Reader replacement clears cached content and restores native method descriptors', () => {
+  const reader = selectableReader();
+  const before = Object.getOwnPropertyDescriptors(reader);
+  const h = harness(reader);
   h.send('GET_READER_INTERACTION_CONTEXT');
-  assert.equal(h.map().results[0].rects[0].x, 10);
+  h.map();
   reader.$el = { isConnected: false };
-  const replacement = createHorizontalReader();
-  replacement.contents = [contentObject(12, 0, 99)];
+  const replacement = selectableReader();
+  replacement.getRectsByContentObjs = () => [{ x: 99, y: 2, w: 30, h: 10 }];
   h.replaceReader(replacement);
   assert.equal(h.map().results[0].rects[0].x, 99);
-  assert.equal(reader.selectObjs, original);
+  for (const key of ['selectObjs', 'clearSelection', 'showSelectionToolBar']) assert.deepEqual(Object.getOwnPropertyDescriptor(reader, key), before[key]);
 });
 
-test('I1 native hook descriptors restore on destruction; native exceptions and frozen readers retain behavior', () => {
-  const reader = createHorizontalReader();
+test('I1 frozen vertical methods keep native behavior; destroyed readers expose no selection', () => {
+  const reader = Object.freeze(selectableReader());
+  const h = harness(reader);
+  assert.equal(h.send('GET_READER_INTERACTION_CONTEXT').context.selection, null);
+  assert.equal(reader.selectObjs([]), 'native-result');
+  const another = selectableReader();
+  const original = another.showSelectionToolBar;
+  const second = harness(another);
+  second.send('GET_READER_INTERACTION_CONTEXT');
+  another._isDestroyed = true;
+  assert.equal(second.send('GET_READER_INTERACTION_CONTEXT').context, null);
+  assert.equal(another.showSelectionToolBar, original);
+});
+
+test('I1 vertical selection rejects malformed, unsafe and foreign-chapter objects', () => {
+  const { readVerticalSelection } = helper.exports;
+  const reader = selectableReader();
+  assert.equal(readVerticalSelection(reader, [{ chapterUid: 12 }]), null);
+  assert.equal(readVerticalSelection(reader, [contentObject(13, 0, 10)]), null);
+  assert.equal(readVerticalSelection(reader, [contentObject(12, Number.MAX_SAFE_INTEGER, 10)]), null);
+  assert.equal(readVerticalSelection(reader, [contentObject(12, 0, 10)]).chapterUid, '12');
+});
+
+test('I1 mode detection is read-only, prioritises native horizontal controls and preserves chapter zero', () => {
+  const { getReaderMode } = helper.exports;
+  const reader = selectableReader();
+  reader.currentChapterUid = 0;
   const before = Object.getOwnPropertyDescriptors(reader);
-  const h = harness(reader, { nativeTools: horizontalTools });
-  h.send('GET_READER_INTERACTION_CONTEXT');
-  reader._isDestroyed = true;
-  assert.equal(h.send('GET_READER_INTERACTION_CONTEXT').context, null);
-  for (const key of ['selectObjs', 'clearSelection', 'showSelectionToolBar', 'setCurrentChapterRenderContents']) {
-    assert.deepEqual(Object.getOwnPropertyDescriptor(reader, key), before[key]);
-  }
-  const frozen = Object.freeze(createHorizontalReader());
-  assert.equal(harness(frozen, { nativeTools: horizontalTools }).send('GET_CAPABILITIES').capabilities.code, 'READY');
-  const throwing = createHorizontalReader();
-  const error = new Error('native failure');
-  throwing.selectObjs = () => { throw error; };
-  const another = harness(throwing, { nativeTools: horizontalTools });
-  another.send('GET_READER_INTERACTION_CONTEXT');
-  assert.throws(() => throwing.selectObjs(throwing.contents), value => value === error);
-});
-
-test('I1 incomplete native tools and disconnected Reader safely decline mapping', () => {
-  const reader = createHorizontalReader();
-  assert.equal(harness(reader).send('GET_CAPABILITIES').capabilities.code, 'READER_METHODS_MISSING');
-  reader.$el = { isConnected: false };
-  assert.equal(harness(reader).send('GET_READER_INTERACTION_CONTEXT').context, null);
-});
-
-test('I1 adapter rejects malformed content and tracks single-page, chapter and size changes', () => {
-  const { getHorizontalContents, getHorizontalContext, horizontalLayoutSignature, readNativeSelection } = helper.exports;
-  const reader = createHorizontalReader();
-  assert.equal(getHorizontalContents(reader, '12').length, 1);
-  reader.getCurrentDisplayRenderContents = () => null;
-  assert.throws(() => getHorizontalContents(reader, '12'), error => error.code === 'READER_RESULT_INVALID');
-  const original = horizontalLayoutSignature(reader);
-  reader.pageWidth++;
-  assert.notEqual(horizontalLayoutSignature(reader), original);
-  reader.isSinglePage = true;
-  assert.deepEqual(getHorizontalContext(reader).visibleChapterUids, ['12']);
-  assert.equal(getHorizontalContext(reader).rightPageIndex, null);
-  assert.equal(readNativeSelection(reader, horizontalTools, [{ chapterUid: 12 }]), null);
+  assert.equal(getReaderMode(reader, { querySelector: selector => selector.includes('isHorizontalReader') ? {} : null }), 'horizontal');
+  assert.equal(getReaderMode(null, { querySelector: () => null }), 'unknown');
+  assert.deepEqual(Object.getOwnPropertyDescriptors(reader), before);
+  assert.equal(harness(reader).send('GET_READER_INTERACTION_CONTEXT').context.chapterUid, '0');
 });
 
 test('M4 public context retains identity after initial script removal without exposing user state', () => {

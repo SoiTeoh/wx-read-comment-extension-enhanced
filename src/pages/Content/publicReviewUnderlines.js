@@ -38,6 +38,17 @@ let sidebarVisible = true;
 let publicReviewIndex = createEmptyIndex();
 let popupReturnFocus = null;
 let readerCompatibility = null;
+let enhancementEnabled = true;
+
+export const setPublicReviewEnabled = enabled => {
+  enhancementEnabled = Boolean(enabled);
+  if (!enhancementEnabled) {
+    invalidationCallback = null;
+    setSidebarVisible(false);
+    clearPublicReviewState();
+    window.postMessage({ source: REQUEST_SOURCE, type: 'INVALIDATE_LAYOUT', reason: 'reader-mode-exited' }, '*');
+  }
+};
 
 function createEmptyIndex(chapterUid = '') {
   return {
@@ -128,6 +139,7 @@ const onPageMessage = (event) => {
   if (!message || message.source !== RESPONSE_SOURCE) return;
 
   if (message.type === 'LAYOUT_INVALIDATED') {
+    if (!enhancementEnabled) return;
     renderGeneration += 1;
     clearPublicUnderlines();
     clearPublicReviewIndex(activeChapterUid);
@@ -388,6 +400,7 @@ const hasActiveTextSelection = () => {
 };
 
 const onDocumentPointerDown = (event) => {
+  if (!enhancementEnabled) return;
   pointerDownPoint = event.button === 0
     ? { x: event.clientX, y: event.clientY }
     : null;
@@ -395,6 +408,7 @@ const onDocumentPointerDown = (event) => {
 };
 
 const onDocumentPointerMoveCapture = (event) => {
+  if (!enhancementEnabled) return;
   if (!pointerDownPoint || !(event.buttons & 1)) return;
   if (
     Math.abs(event.clientX - pointerDownPoint.x) > 5 ||
@@ -403,6 +417,7 @@ const onDocumentPointerMoveCapture = (event) => {
 };
 
 const onDocumentClickCapture = (event) => {
+  if (!enhancementEnabled) return;
   const wasDrag = pointerDragged;
   pointerDownPoint = null;
   pointerDragged = false;
@@ -428,6 +443,7 @@ const updateHoverAtPoint = () => {
 };
 
 const onDocumentPointerMove = (event) => {
+  if (!enhancementEnabled) return;
   hoverPoint = { x: event.clientX, y: event.clientY, target: event.target };
   if (!hoverFrame) hoverFrame = window.requestAnimationFrame(updateHoverAtPoint);
 };
@@ -708,6 +724,7 @@ export const probePublicReviewCompatibility = async () => {
 };
 
 export const invalidatePublicReviewLayout = (reason) => {
+  if (!enhancementEnabled) return;
   renderGeneration += 1;
   clearPublicUnderlines();
   clearPublicReviewIndex(activeChapterUid);
@@ -754,6 +771,7 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
     },
     failedRangeSamples: invalidFailures,
   };
+  if (!enhancementEnabled) return { ...emptyStats, staleDiscarded: true };
   try {
     const probe = await sendPageRequest('GET_CAPABILITIES');
     if (generation !== renderGeneration || activeChapterUid !== normalizedChapterUid) {

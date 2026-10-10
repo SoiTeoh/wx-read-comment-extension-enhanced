@@ -322,6 +322,21 @@ const requestReaderContext = (): Promise<{ bookId?: string; chapterUid?: string 
     window.postMessage({ source: 'WXRC', type: 'GET_READER_CONTEXT', requestId }, '*');
   });
 
+export const resolveReaderMode = (): Promise<string> => new Promise(resolve => {
+  const requestId = `mode_${Date.now()}_${Math.random()}`;
+  const finish = (mode: string) => {
+    window.clearTimeout(timer);
+    window.removeEventListener('message', onMessage);
+    resolve(mode);
+  };
+  const onMessage = (event: MessageEvent) => {
+    if (event.source === window && event.data?.source === 'WXRC_PAGE' && event.data.type === 'READER_MODE_RESULT' && event.data.requestId === requestId) finish(event.data.mode || 'unknown');
+  };
+  const timer = window.setTimeout(() => finish('unknown'), 1000);
+  window.addEventListener('message', onMessage);
+  window.postMessage({ source: 'WXRC', type: 'GET_READER_MODE', requestId }, '*');
+});
+
 export const resolveBookId = async (): Promise<ReaderIdentity | null> => {
   const query = getBookIdFromLocation();
   if (query) return query;
@@ -559,14 +574,14 @@ export const filterReviewsByChapterUid = (
 };
 
 export const getCommentData = async (
-  params: Record<string, string | number>
+  params: Record<string, string | number>, signal?: AbortSignal
 ): Promise<WeReadReviewResponse> => {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) =>
     query.set(key, String(value))
   );
   const url = `https://weread.qq.com/web/review/list?${query.toString()}`;
-  const response = await fetch(url, { credentials: 'include' });
+  const response = await fetch(url, { credentials: 'include', ...(signal ? { signal } : {}) });
   if (!response.ok) {
     throw new Error(`review/list failed: HTTP ${response.status}`);
   }
@@ -577,7 +592,8 @@ export const getCommentData = async (
 // the server explicitly returns it. A short page is not proof of completion.
 export const getAllCommentData = async (
   params: Record<string, string | number>,
-  isCurrent: () => boolean | Promise<boolean> = () => true
+  isCurrent: () => boolean | Promise<boolean> = () => true,
+  signal?: AbortSignal
 ): Promise<WeReadReviewResponse> => {
   let pageSize = 1000;
   const maxPageSize = 5000;
@@ -594,7 +610,7 @@ export const getAllCommentData = async (
       stoppedReason = 'chapter-changed';
       break;
     }
-    const page = await getCommentData({ ...params, count: pageSize, ...cursor });
+    const page = await getCommentData({ ...params, count: pageSize, ...cursor }, signal);
     pages.push(page);
     if (!(await isCurrent())) {
       stoppedReason = 'chapter-changed';
