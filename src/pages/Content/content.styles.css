@@ -766,3 +766,15 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     padding: 10px 12px;
     border-radius: 12px;
 }
+.wxrc_compatibility_notice {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--wxrc-outline);
+    border-radius: 14px;
+    background: var(--wxrc-surface-container);
+    color: var(--wxrc-on-surface);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+.wxrc_compatibility_notice p { margin: 0 0 8px; }

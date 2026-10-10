@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getFormattedDate, getReview } from './utils';
+import { getCompatibilityMessage } from './readerCompatibility';
 
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
@@ -108,11 +109,19 @@ const Comment = (props) => {
         <h1>
           {chapterTitle} · 已加载 {commentData.length} 条公开评论
         </h1>
+        {reviewSync?.compatibility?.mappingAvailable === false && (
+          <div className="wxrc_compatibility_notice" role="status" data-code={reviewSync.compatibility.code}>
+            <p>{getCompatibilityMessage(reviewSync.compatibility.code)}</p>
+            <p>已加载的公开评论仍可搜索和阅读。</p>
+            <button type="button" onClick={reviewSync.onRetryCompatibility}>重试定位</button>
+          </div>
+        )}
         <div className="wxrc_settings" role="group" aria-label="公开评论设置">
           <label>
             <input
               type="checkbox"
               checked={settings?.followReadingPosition !== false}
+              disabled={reviewSync?.compatibility?.mappingAvailable === false}
               onChange={(event) => onSettingChange?.('followReadingPosition', event.target.checked)}
             />
             跟随阅读位置
@@ -121,6 +130,7 @@ const Comment = (props) => {
             <input
               type="checkbox"
               checked={settings?.showPublicUnderlines !== false}
+              disabled={reviewSync?.compatibility?.mappingAvailable === false}
               onChange={(event) => onSettingChange?.('showPublicUnderlines', event.target.checked)}
             />
             显示可点击评论划线

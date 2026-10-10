@@ -6,6 +6,13 @@ const babel = require('@babel/core');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
+const compatibilityPath = path.resolve(__dirname, '../src/pages/Content/readerCompatibility.js');
+const compatibilityModule = new Module(compatibilityPath, module);
+compatibilityModule._compile(babel.transformFileSync(compatibilityPath, {
+  configFile: false, babelrc: false,
+  presets: [['@babel/preset-env', { targets: { node: 'current' } }]],
+}).code, compatibilityPath);
+
 const sourcePath = path.resolve(__dirname, '../src/pages/Content/Comment.jsx');
 const compiled = babel.transformFileSync(sourcePath, {
   configFile: false,
@@ -20,10 +27,23 @@ componentModule.filename = sourcePath;
 componentModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
 componentModule.require = (name) => name === './utils'
   ? { getReview: (entry) => entry.review || entry, getFormattedDate: () => '' }
-  : require(name);
+  : name === './readerCompatibility' ? compatibilityModule.exports : require(name);
 componentModule._compile(compiled, sourcePath);
 const Comment = componentModule.exports.default;
 const { matchesCommentFilter } = componentModule.exports;
+
+test('M4 不兼容提示保留评论搜索与全文，禁用定位设置并提供独立重试', () => {
+  const html = renderToStaticMarkup(React.createElement(Comment, {
+    list: [{ reviewId: 'a', content: '仍然可以阅读的公开评论' }], loadStatus: 'ready',
+    reviewSync: { compatibility: { mappingAvailable: false, code: 'READER_METHODS_MISSING' } },
+  }));
+  assert.match(html, /当前微信读书页面暂不支持/);
+  assert.match(html, /仍然可以阅读的公开评论/);
+  assert.match(html, /搜索评论、引用或作者/);
+  assert.match(html, /重试定位/);
+  assert.equal((html.match(/disabled=""/g) || []).length, 3); // 2 mapping settings and clear filter.
+  assert.doesNotMatch(html, /wxrc_jump_to_text/);
+});
 
 test('M3 筛选匹配正文、引用和作者，清除后完整恢复且不修改源数据', () => {
   const entries = [

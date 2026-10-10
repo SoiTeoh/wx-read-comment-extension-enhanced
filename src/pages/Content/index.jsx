@@ -16,6 +16,7 @@ import {
   getPublicReviewSyncProps,
   initializePublicReviewUnderlines,
   invalidatePublicReviewLayout,
+  probePublicReviewCompatibility,
   renderPublicReviewUnderlines,
   setFollowReadingPosition,
   setPublicUnderlinesVisible,
@@ -71,17 +72,13 @@ const renderComments = (list, chapterName, loadStatus, onReload, reviewSync, set
 
 const start = async () => {
   const appDom = document.getElementById('app');
-  if (!appDom) {
-    phase2Log('cannot start: #app was not found');
-    return;
-  }
 
   let settings = await loadSettings();
   setFollowReadingPosition(settings.followReadingPosition);
   setPublicUnderlinesVisible(settings.showPublicUnderlines);
   wrapper = document.createElement('div');
   wrapper.className = 'chrex-comment-wrapper';
-  appDom.append(wrapper);
+  (appDom || document.body).append(wrapper);
   const sidebarLauncher = document.createElement('button');
   sidebarLauncher.type = 'button';
   sidebarLauncher.className = 'wxrc_sidebar_launcher';
@@ -100,6 +97,7 @@ const start = async () => {
   let currentChapterName = '';
   let loadStatus = 'loading';
   let readyForSync = false;
+  let remapRequested = false;
   let reviewSync = getPublicReviewSyncProps();
   const onSettingChange = (key, value) => {
     if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return;
@@ -126,7 +124,11 @@ const start = async () => {
       currentChapterName,
       loadStatus,
       () => readyForSync ? scheduleSync(true) : window.location.reload(),
-      reviewSync,
+      { ...reviewSync, onRetryCompatibility: () => {
+        remapRequested = true;
+        if (readyForSync) scheduleSync();
+        else window.location.reload();
+      } },
       settings,
       onSettingChange
     );
@@ -134,8 +136,13 @@ const start = async () => {
   initializePublicReviewUnderlines(() => {
     reviewSync = getPublicReviewSyncProps();
     renderLatestComments();
-    scheduleSync(true);
+    remapRequested = true;
+    scheduleSync();
   });
+
+  await probePublicReviewCompatibility();
+  reviewSync = getPublicReviewSyncProps();
+  renderLatestComments();
 
   const book = await resolveBookId();
   if (!book) {
@@ -163,6 +170,20 @@ const start = async () => {
 
   let activeChapterUid = '';
 
+  const mapCurrentReviews = async (chapter) => {
+    const stats = await renderPublicReviewUnderlines(latestComments, chapter.chapterUid);
+    const current = await resolveCurrentChapter(catalog.chapters);
+    if (stats?.staleDiscarded || current?.chapterUid !== chapter.chapterUid) return;
+    wrapper.dataset.chapterUid = chapter.chapterUid;
+    wrapper.dataset.layoutVersion = String(stats.layoutVersion ?? '');
+    wrapper.dataset.mappedRangeCount = String(stats.mappedRangeCount);
+    wrapper.dataset.failedRangeCount = String(stats.failedRangeCount);
+    wrapper.dataset.mappingCallCounts = JSON.stringify(stats.mappingCallCounts || null);
+    reviewSync = getPublicReviewSyncProps();
+    wrapper.dataset.compatibility = reviewSync.compatibility?.code || '';
+    renderLatestComments();
+  };
+
   const syncCurrentChapter = async (force = false) => {
     if (syncInFlight) {
       syncAgain = true;
@@ -178,7 +199,14 @@ const start = async () => {
         renderLatestComments();
         return;
       }
-      if (!force && chapter.chapterUid === activeChapterUid) {
+      const reuseReviews = !force && chapter.chapterUid === activeChapterUid &&
+        remapRequested && loadStatus === 'ready';
+      if (!force && chapter.chapterUid === activeChapterUid && !reuseReviews) {
+        return;
+      }
+      remapRequested = false;
+      if (reuseReviews) {
+        await mapCurrentReviews(chapter);
         return;
       }
 
@@ -249,31 +277,7 @@ const start = async () => {
       loadStatus = 'ready';
       reviewSync = getPublicReviewSyncProps();
       renderLatestComments();
-      const underlineStats = await renderPublicReviewUnderlines(
-        filtered,
-        chapter.chapterUid
-      );
-      const currentAfterMapping = await resolveCurrentChapter(catalog.chapters);
-      if (
-        underlineStats?.staleDiscarded ||
-        currentAfterMapping?.chapterUid !== chapter.chapterUid
-      ) {
-        phase2Log('discarded stale range mapping result', {
-          requestChapterUid: chapter.chapterUid,
-          currentChapterUid: currentAfterMapping?.chapterUid || '',
-          layoutVersion: underlineStats?.layoutVersion ?? null,
-        });
-        return;
-      }
-      wrapper.dataset.chapterUid = chapter.chapterUid;
-      wrapper.dataset.layoutVersion = String(underlineStats.layoutVersion);
-      wrapper.dataset.mappedRangeCount = String(underlineStats.mappedRangeCount);
-      wrapper.dataset.failedRangeCount = String(underlineStats.failedRangeCount);
-      wrapper.dataset.mappingCallCounts = JSON.stringify(
-        underlineStats.mappingCallCounts || null
-      );
-      reviewSync = getPublicReviewSyncProps();
-      renderLatestComments();
+      await mapCurrentReviews(chapter);
     } catch (error) {
       phase2Log('chapter comment sync failed', String(error));
       loadStatus = 'error';
@@ -290,6 +294,7 @@ const start = async () => {
   };
 
   function scheduleSync(force = false) {
+    if (!readyForSync) return;
     scheduledSyncForce = scheduledSyncForce || force;
     window.clearTimeout(syncTimer);
     syncTimer = window.setTimeout(() => {

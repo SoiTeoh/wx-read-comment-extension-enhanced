@@ -1,3 +1,5 @@
+import { captureReaderRenderContents, detectReaderCapabilities, readerError } from './readerCompatibility';
+
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
 const MAX_BATCH_SIZE = 1000;
@@ -34,40 +36,48 @@ const installWebpackRuntimeCapture = () => {
         const wrappedFactory = function (...args) {
           if (typeof args[2] === 'function') capturedWebpackRequire = args[2];
           const result = factory.apply(this, args);
-          const moduleExports = args[0]?.exports;
-          const candidates = [moduleExports];
           try {
-            if (moduleExports?.default) candidates.push(moduleExports.default);
-          } catch (_error) {
-            // Ignore harmony getters that are not initialized yet.
-          }
-          for (const candidate of candidates) {
-            if (
-              typeof candidate === 'function' &&
-              candidate.version &&
-              typeof candidate.prototype?._init === 'function' &&
-              !candidate.prototype._init.__wxrcWrapped
-            ) {
-              const originalInit = candidate.prototype._init;
-              const wrappedInit = function (...initArgs) {
-                capturedVueInstances.push(this);
-                if (capturedVueInstances.length > 2000) capturedVueInstances.shift();
-                return originalInit.apply(this, initArgs);
-              };
-              Object.defineProperty(wrappedInit, '__wxrcWrapped', { value: true });
-              candidate.prototype._init = wrappedInit;
+            const moduleExports = args[0]?.exports;
+            const candidates = [moduleExports];
+            try {
+              if (moduleExports?.default) candidates.push(moduleExports.default);
+            } catch (_error) {
+              // Ignore harmony getters that are not initialized yet.
             }
+            for (const candidate of candidates) {
+              if (
+                typeof candidate === 'function' &&
+                candidate.version &&
+                typeof candidate.prototype?._init === 'function' &&
+                !candidate.prototype._init.__wxrcWrapped
+              ) {
+                const originalInit = candidate.prototype._init;
+                const wrappedInit = function (...initArgs) {
+                  capturedVueInstances.push(this);
+                  if (capturedVueInstances.length > 2000) capturedVueInstances.shift();
+                  return originalInit.apply(this, initArgs);
+                };
+                Object.defineProperty(wrappedInit, '__wxrcWrapped', { value: true });
+                candidate.prototype._init = wrappedInit;
+              }
+            }
+          } catch (_error) {
+            // Observing or wrapping an incompatible export must not break its native factory.
           }
           return result;
         };
         Object.defineProperty(wrappedFactory, '__wxrcWrapped', { value: true });
-        modules[moduleId] = wrappedFactory;
+        try { modules[moduleId] = wrappedFactory; } catch (_error) { /* Frozen factories remain untouched. */ }
       }
     };
-    for (const payload of array) wrapModules(payload);
+    const safeWrapModules = (payload) => {
+      try { wrapModules(payload); } catch (_error) { /* Native payload processing takes priority. */ }
+    };
+    for (const payload of array) safeWrapModules(payload);
+    const originalPush = array.push;
     let currentPush = function (...payloads) {
-      for (const payload of payloads) wrapModules(payload);
-      return Array.prototype.push.apply(array, payloads);
+      for (const payload of payloads) safeWrapModules(payload);
+      return originalPush.apply(array, payloads);
     };
     Object.defineProperty(array, 'push', {
       configurable: true,
@@ -75,8 +85,9 @@ const installWebpackRuntimeCapture = () => {
         return currentPush;
       },
       set(nextPush) {
+        if (typeof nextPush !== 'function') { currentPush = nextPush; return; }
         currentPush = function (...payloads) {
-          for (const payload of payloads) wrapModules(payload);
+          for (const payload of payloads) safeWrapModules(payload);
           return nextPush.apply(array, payloads);
         };
       },
@@ -90,13 +101,18 @@ const installWebpackRuntimeCapture = () => {
       return webpackJsonpValue;
     },
     set(value) {
-      webpackJsonpValue = prepareJsonpArray(value);
+      try { webpackJsonpValue = prepareJsonpArray(value); }
+      catch (_error) { webpackJsonpValue = value; }
     },
   });
   if (webpackJsonpValue) webpackJsonpValue = prepareJsonpArray(webpackJsonpValue);
 };
 
-installWebpackRuntimeCapture();
+try {
+  installWebpackRuntimeCapture();
+} catch (_error) {
+  // A frozen or changed webpack global must never prevent the native page from loading.
+}
 
 const normalizeChapterUid = (value) =>
   value === null || typeof value === 'undefined' ? '' : String(value);
@@ -108,9 +124,11 @@ const getReaderChapterUid = (reader) =>
 
 const isReader = (value) =>
   value &&
-  typeof value.handleClickUnderline === 'function' &&
-  typeof value.findObjsInOffsetRange === 'function' &&
-  typeof value.getRectsByContentObjs === 'function';
+  !value._isDestroyed &&
+  (value.$options?.name === 'reader' ||
+    READER_DISCOVERY_METHODS.every((key) => typeof value[key] === 'function'));
+
+const READER_DISCOVERY_METHODS = ['handleClickUnderline', 'findObjsInOffsetRange'];
 
 const findReaderInVueTree = (seeds) => {
   const queue = seeds.filter(Boolean);
@@ -121,9 +139,13 @@ const findReaderInVueTree = (seeds) => {
     if (!candidate || seen.has(candidate)) continue;
     seen.add(candidate);
     visited += 1;
-    if (isReader(candidate)) return candidate;
-    if (candidate.$parent) queue.push(candidate.$parent);
-    if (Array.isArray(candidate.$children)) queue.push(...candidate.$children);
+    try {
+      if (isReader(candidate)) return candidate;
+      if (candidate.$parent) queue.push(candidate.$parent);
+      if (Array.isArray(candidate.$children)) queue.push(...candidate.$children);
+    } catch (_error) {
+      // Ignore incompatible Vue instances and throwing getters.
+    }
   }
   return null;
 };
@@ -148,7 +170,9 @@ const captureWebpackRequire = () => {
 };
 
 const findReader = () => {
-  if (isReader(cachedReader) && !cachedReader._isDestroyed) return cachedReader;
+  try {
+    if (isReader(cachedReader) && cachedReader.$el?.isConnected !== false) return cachedReader;
+  } catch (_error) { cachedReader = null; }
 
   const seeds = [];
   for (const selector of [
@@ -167,12 +191,31 @@ const findReader = () => {
   ]);
   if (!reader) {
     const webpackRequire = captureWebpackRequire();
-    let vm = webpackRequire?.c?.['1380']?.exports?.__ob__?.dep?.subs?.[0]?.vm;
-    while (vm && vm.$options?.name !== 'reader') vm = vm.$parent;
-    reader = findReaderInVueTree([vm]);
+    const moduleSeeds = [];
+    for (const module of Object.values(webpackRequire?.c || {}).slice(0, 2000)) {
+      try {
+        const exports = module?.exports;
+        for (const value of [exports, exports?.default]) {
+          if (value?.$options || value?.$parent || value?.$children) moduleSeeds.push(value);
+          const subscriptions = value?.__ob__?.dep?.subs;
+          if (Array.isArray(subscriptions)) moduleSeeds.push(...subscriptions.slice(0, 20).map((item) => item?.vm));
+        }
+      } catch (_error) {
+        // Some webpack exports are lazy getters.
+      }
+    }
+    reader = findReaderInVueTree(moduleSeeds);
   }
   cachedReader = reader;
   return reader;
+};
+
+const getCapabilities = () => {
+  try {
+    return detectReaderCapabilities(findReader(), document.querySelector('.wr_canvasContainer'));
+  } catch (_error) {
+    return { mappingAvailable: false, code: 'READER_INSPECTION_FAILED' };
+  }
 };
 
 const invalidateLayout = (reason, notify = true) => {
@@ -190,47 +233,17 @@ const invalidateLayout = (reason, notify = true) => {
 
 const captureRenderContents = (chapterUid, probeRange) => {
   const reader = findReader();
-  if (!reader) throw new Error('Reader runtime is unavailable');
+  const capabilities = detectReaderCapabilities(reader, document.querySelector('.wr_canvasContainer'));
+  if (!capabilities.mappingAvailable) throw readerError(capabilities.code);
 
   const actualChapterUid = getReaderChapterUid(reader);
   if (actualChapterUid && actualChapterUid !== normalizeChapterUid(chapterUid)) {
-    throw new Error(
-      `Reader chapter mismatch: expected ${chapterUid}, got ${actualChapterUid}`
-    );
+    throw readerError('CHAPTER_MISMATCH');
   }
 
   const start = probeRange?.start ?? 0;
   const end = probeRange?.end ?? start + 1;
-  const originalFind = reader.findObjsInOffsetRange;
-  const originalToolbar = reader.showSelectionToolBar;
-  let captured = null;
-
-  try {
-    reader.findObjsInOffsetRange = function (
-      renderContents,
-      rangeStart,
-      rangeEnd,
-      rangeChapterUid
-    ) {
-      if (Array.isArray(renderContents)) captured = renderContents;
-      return originalFind.call(
-        this,
-        renderContents,
-        rangeStart,
-        rangeEnd,
-        rangeChapterUid
-      );
-    };
-    reader.showSelectionToolBar = () => {};
-    reader.handleClickUnderline({ notes: [], range: { start, end } });
-  } finally {
-    reader.findObjsInOffsetRange = originalFind;
-    reader.showSelectionToolBar = originalToolbar;
-  }
-
-  if (!Array.isArray(captured) || captured.length === 0) {
-    throw new Error('Current renderContents could not be captured');
-  }
+  const captured = captureReaderRenderContents(reader, start, end);
   cachedReader = reader;
   cachedRenderContents = captured;
   cachedChapterUid = normalizeChapterUid(chapterUid);
@@ -281,8 +294,11 @@ const getRectsForReviews = (chapterUid, reviews) => {
   if (!reviews.every(isValidRequestItem)) throw new Error('Invalid review range batch');
 
   const reader = findReader();
-  if (!reader) throw new Error('Reader runtime is unavailable');
+  const capabilities = getCapabilities();
+  if (!capabilities.mappingAvailable) throw readerError(capabilities.code);
   const normalizedChapterUid = normalizeChapterUid(chapterUid);
+  const actualChapterUid = getReaderChapterUid(reader);
+  if (actualChapterUid && actualChapterUid !== normalizedChapterUid) throw readerError('CHAPTER_MISMATCH');
   const renderVersionChanged =
     cachedRenderVersion !== null &&
     reader.renderContentsVersion !== cachedRenderVersion;
@@ -312,9 +328,11 @@ const getRectsForReviews = (chapterUid, reviews) => {
         review.start,
         review.end
       );
+      if (!Array.isArray(objects)) throw readerError('READER_RESULT_INVALID');
       mappingDiagnostics.getRectsByContentObjsCalls += 1;
-      const rects = reader
-        .getRectsByContentObjs(objects)
+      const rawRects = reader.getRectsByContentObjs(objects);
+      if (!Array.isArray(rawRects)) throw readerError('READER_RESULT_INVALID');
+      const rects = rawRects
         .map(serializeRect)
         .filter(
           (rect) =>
@@ -348,11 +366,17 @@ const getRectsForReviews = (chapterUid, reviews) => {
         rects: [],
         matchedObjectCount: 0,
         rectCount: 0,
-        failureReason: 'OTHER',
+        failureReason: error.code === 'READER_RESULT_INVALID' ? error.code : 'OTHER',
         error: String(error),
       };
     }
   });
+  if (results.some((item) => item.failureReason === 'READER_RESULT_INVALID')) {
+    throw readerError('READER_RESULT_INVALID');
+  }
+  if (results.length && results.every((item) => item.failureReason === 'OTHER')) {
+    throw readerError('READER_MAPPING_FAILED');
+  }
   return {
     results,
     chapterUid: getReaderChapterUid(reader) || normalizedChapterUid,
@@ -389,6 +413,25 @@ window.addEventListener('message', (event) => {
     );
     return;
   }
+  if (message.type === 'GET_CAPABILITIES') {
+    window.postMessage({ source: RESPONSE_SOURCE, type: 'CAPABILITIES_RESULT',
+      requestId: message.requestId, capabilities: getCapabilities() }, '*');
+    return;
+  }
+  if (message.type === 'GET_READER_CONTEXT') {
+    let context = { bookId: '', chapterUid: '' };
+    try {
+      const reader = findReader();
+      const initial = window.__INITIAL_STATE__?.reader;
+      context = {
+        bookId: normalizeChapterUid(reader?.bookId || initial?.bookId || initial?.bookInfo?.bookId),
+        chapterUid: getReaderChapterUid(reader),
+      };
+    } catch (_error) { /* Return only public identity fields, never the full initial state. */ }
+    window.postMessage({ source: RESPONSE_SOURCE, type: 'READER_CONTEXT_RESULT',
+      requestId: message.requestId, context }, '*');
+    return;
+  }
   if (message.type !== 'GET_RECTS_BATCH') return;
 
   try {
@@ -418,6 +461,7 @@ window.addEventListener('message', (event) => {
         clientLayoutEpoch: message.clientLayoutEpoch,
         results: [],
         error: String(error),
+        errorCode: error.code || 'READER_MAPPING_FAILED',
       },
       '*'
     );
@@ -425,6 +469,8 @@ window.addEventListener('message', (event) => {
 });
 
 const getLayoutSignature = () => {
+  const capabilities = getCapabilities();
+  if (!capabilities.mappingAvailable) return capabilities.code;
   const reader = findReader();
   const container = document.querySelector('.wr_canvasContainer');
   if (!reader || !container) return '';
@@ -437,7 +483,8 @@ const getLayoutSignature = () => {
 };
 
 window.setInterval(() => {
-  const signature = getLayoutSignature();
+  let signature;
+  try { signature = getLayoutSignature(); } catch (_error) { signature = 'READER_INSPECTION_FAILED'; }
   if (!signature) return;
   if (lastLayoutSignature && signature !== lastLayoutSignature) {
     invalidateLayout('reader-layout-changed');

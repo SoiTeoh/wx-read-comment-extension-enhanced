@@ -29,6 +29,29 @@ const item = (reviewId, chapterUid) => ({
   review: { reviewId, chapterUid, range: '10-20', abstract: reviewId },
 });
 
+test('M4 runtime identity precedes unrelated DOM book data and resolves the actual chapter', async (t) => {
+  const previous = global.window;
+  let listener;
+  let removed = 0;
+  global.window = {
+    location: { search: '' },
+    setTimeout: () => 1, clearTimeout() {},
+    addEventListener(_type, callback) { listener = callback; },
+    removeEventListener() { removed++; },
+    postMessage(message) {
+      listener({ source: global.window, data: { source: 'WXRC_PAGE', type: 'READER_CONTEXT_RESULT',
+        requestId: message.requestId, context: { bookId: '638162', chapterUid: '379' } } });
+    },
+  };
+  t.after(() => { if (previous === undefined) delete global.window; else global.window = previous; });
+  assert.deepEqual(await utilityModule.exports.resolveBookId(),
+    { value: '638162', source: 'Reader runtime context' });
+  const chapter = await utilityModule.exports.resolveCurrentChapter([{ chapterUid: 379, chapterIdx: 1, title: '引子' }]);
+  assert.equal(chapter.chapterUid, '379');
+  assert.equal(chapter.source, 'Reader runtime context');
+  assert.equal(removed, 2);
+});
+
 test('章节筛选保留完整接口条目，只选真实 chapterUid', () => {
   const first = item('a', 12);
   const second = item('b', 14);

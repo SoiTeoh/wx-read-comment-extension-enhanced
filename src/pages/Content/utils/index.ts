@@ -208,7 +208,7 @@ const readInitialState = (root: ParentNode): unknown => {
   return null;
 };
 
-const getBookIdFromDocument = (root: ParentNode): ReaderIdentity | null => {
+const getBookIdFromDocument = (root: ParentNode, structuredOnly = false): ReaderIdentity | null => {
   const initialState = readInitialState(root) as Record<string, unknown> | null;
   const reader = initialState?.reader as Record<string, unknown> | undefined;
   const bookInfo = reader?.bookInfo as Record<string, unknown> | undefined;
@@ -221,6 +221,7 @@ const getBookIdFromDocument = (root: ParentNode): ReaderIdentity | null => {
       source: '__INITIAL_STATE__.reader.bookInfo.bookId',
     };
   }
+  if (structuredOnly) return null;
 
   const jsonLdScripts = Array.from(
     root.querySelectorAll('script[type="application/ld+json"]')
@@ -303,18 +304,41 @@ const getBookIdFromBackground = async (
   return null;
 };
 
+const requestReaderContext = (): Promise<{ bookId?: string; chapterUid?: string } | null> =>
+  new Promise((resolve) => {
+    const requestId = `context_${Date.now()}_${Math.random()}`;
+    const finish = (value: { bookId?: string; chapterUid?: string } | null) => {
+      window.clearTimeout(timer);
+      window.removeEventListener('message', onMessage);
+      resolve(value);
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.data?.source !== 'WXRC_PAGE' ||
+          event.data.type !== 'READER_CONTEXT_RESULT' || event.data.requestId !== requestId) return;
+      finish(event.data.context || null);
+    };
+    const timer = window.setTimeout(() => finish(null), 1000);
+    window.addEventListener('message', onMessage);
+    window.postMessage({ source: 'WXRC', type: 'GET_READER_CONTEXT', requestId }, '*');
+  });
+
 export const resolveBookId = async (): Promise<ReaderIdentity | null> => {
-  const direct = getBookIdFromLocation() || getBookIdFromDocument(document);
+  const query = getBookIdFromLocation();
+  if (query) return query;
+  const context = await requestReaderContext();
+  const runtimeBookId = normalizeId(context?.bookId);
+  if (runtimeBookId) return { value: runtimeBookId, source: 'Reader runtime context' };
+  const direct = getBookIdFromDocument(document, true);
   if (direct) {
     return direct;
   }
 
   const readerDocument = await fetchReaderDocument();
-  const fromHtml = readerDocument && getBookIdFromDocument(readerDocument);
+  const fromHtml = readerDocument && getBookIdFromDocument(readerDocument, true);
   if (fromHtml) {
     return { ...fromHtml, source: `reader HTML ${fromHtml.source}` };
   }
-  return getBookIdFromBackground();
+  return getBookIdFromDocument(document) || getBookIdFromBackground();
 };
 
 export const getChapterCatalog = async (
@@ -398,6 +422,7 @@ const readChapterUidFromElement = (element: Element | null): string => {
 const getCurrentChapterTitle = (): string => {
   const selectors = [
     '.readerTopBar_title_chapter',
+    '.renderTargetPageInfo_header_chapterTitle',
     '.readerCatalog_list_item_selected',
     '[aria-current="true"]',
   ];
@@ -421,6 +446,12 @@ export const resolveCurrentChapter = async (
   );
   if (queryUid) {
     return findChapterByUid(chapters, queryUid, 'reader URL query');
+  }
+
+  const context = await requestReaderContext();
+  const runtimeChapterUid = normalizeChapterUid(context?.chapterUid);
+  if (runtimeChapterUid) {
+    return findChapterByUid(chapters, runtimeChapterUid, 'Reader runtime context');
   }
 
   const centerElement = document.elementFromPoint(

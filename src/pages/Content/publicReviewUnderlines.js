@@ -1,6 +1,7 @@
 import { getReview } from './utils';
 import { debugLog } from './debug';
 import { badgeWidthForCount, positionBadge, positionPopup } from './popupBadgeLayout';
+import { compatibilityFailure } from './readerCompatibility';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -36,6 +37,7 @@ let showPublicUnderlines = true;
 let sidebarVisible = true;
 let publicReviewIndex = createEmptyIndex();
 let popupReturnFocus = null;
+let readerCompatibility = null;
 
 function createEmptyIndex(chapterUid = '') {
   return {
@@ -113,6 +115,7 @@ const clearPublicReviewIndex = (chapterUid = '') => {
 };
 
 export const clearPublicReviewState = (chapterUid = '') => {
+  readerCompatibility = null;
   renderGeneration += 1;
   activeChapterUid = String(chapterUid || '');
   clearPublicUnderlines();
@@ -133,7 +136,7 @@ const onPageMessage = (event) => {
   }
 
   if (
-    !['PONG', 'RECTS_RESULT'].includes(message.type) ||
+    !['PONG', 'RECTS_RESULT', 'CAPABILITIES_RESULT'].includes(message.type) ||
     typeof message.requestId !== 'string'
   ) {
     return;
@@ -142,7 +145,7 @@ const onPageMessage = (event) => {
   if (!pending) return;
   pendingRequests.delete(message.requestId);
   window.clearTimeout(pending.timer);
-  if (message.error) pending.reject(new Error(message.error));
+  if (message.error) pending.reject(Object.assign(new Error(message.error), { code: message.errorCode }));
   else pending.resolve(message);
 };
 
@@ -151,7 +154,7 @@ const sendPageRequest = (type, payload = {}) =>
     const requestId = createRequestId();
     const timer = window.setTimeout(() => {
       pendingRequests.delete(requestId);
-      reject(new Error(`${type} timed out`));
+      reject(Object.assign(new Error(`${type} timed out`), { code: 'BRIDGE_TIMEOUT' }));
     }, REQUEST_TIMEOUT_MS);
     pendingRequests.set(requestId, { resolve, reject, timer });
     window.postMessage(
@@ -652,6 +655,7 @@ export const getPublicReviewSyncProps = () => {
     rangeReviewCounts.set(rangeKey, value.reviews.length);
   }
   return {
+    compatibility: readerCompatibility,
     chapterUid: publicReviewIndex.chapterUid,
     layoutVersion: publicReviewIndex.layoutVersion,
     mappedReviewIds: new Set(publicReviewIndex.reviews.keys()),
@@ -688,6 +692,19 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
     }
   });
   window.addEventListener('scroll', () => removePopup(), { passive: true });
+};
+
+export const probePublicReviewCompatibility = async () => {
+  const generation = renderGeneration;
+  try {
+    const response = await sendPageRequest('GET_CAPABILITIES');
+    if (generation === renderGeneration) {
+      readerCompatibility = response.capabilities?.mappingAvailable === true
+        ? response.capabilities : compatibilityFailure(response.capabilities?.code || 'READER_INSPECTION_FAILED');
+    }
+  } catch (error) {
+    if (generation === renderGeneration) readerCompatibility = compatibilityFailure(error.code || 'READER_INSPECTION_FAILED');
+  }
 };
 
 export const invalidatePublicReviewLayout = (reason) => {
@@ -737,12 +754,15 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
     },
     failedRangeSamples: invalidFailures,
   };
-  if (payload.length === 0) {
-    debugLog('Mapping', 'no valid ranges', emptyStats);
-    return emptyStats;
-  }
-
   try {
+    const probe = await sendPageRequest('GET_CAPABILITIES');
+    if (generation !== renderGeneration || activeChapterUid !== normalizedChapterUid) {
+      return { ...emptyStats, staleDiscarded: true };
+    }
+    readerCompatibility = probe.capabilities?.mappingAvailable === true
+      ? probe.capabilities : compatibilityFailure(probe.capabilities?.code || 'READER_INSPECTION_FAILED');
+    if (!readerCompatibility.mappingAvailable) return { ...emptyStats, compatibility: readerCompatibility };
+    if (payload.length === 0) return { ...emptyStats, compatibility: readerCompatibility };
     const response = await sendPageRequest('GET_RECTS_BATCH', {
       chapterUid: normalizedChapterUid,
       clientLayoutEpoch: generation,
@@ -875,7 +895,13 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
     debugLog('Mapping', 'range mapping stats', stats);
     return stats;
   } catch (error) {
-    const failedStats = { ...emptyStats, error: String(error) };
+    if (generation !== renderGeneration || activeChapterUid !== normalizedChapterUid) {
+      return { ...emptyStats, staleDiscarded: true };
+    }
+    clearPublicUnderlines();
+    clearPublicReviewIndex(normalizedChapterUid);
+    readerCompatibility = compatibilityFailure(error.code || 'READER_MAPPING_FAILED');
+    const failedStats = { ...emptyStats, error: String(error), compatibility: readerCompatibility };
     console.warn(
       '[WxReadComments][Phase4.5] underline render failed',
       failedStats.error
