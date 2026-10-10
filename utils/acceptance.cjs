@@ -13,6 +13,7 @@ const gates = [
   ],
   ['M4 browser compatibility', ['tests/m4-browser-smoke.cjs']],
   ['M5 UI, lifecycle and performance', ['tests/m5-browser-regression.cjs']],
+  ['I1 horizontal Reader and selection lifecycle', ['tests/i1-browser-regression.cjs']],
 ];
 for (const [name, args] of gates) {
   console.log(`\nAcceptance gate: ${name}`);

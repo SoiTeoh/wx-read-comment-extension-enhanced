@@ -1,5 +1,7 @@
 import { captureReaderRenderContents, detectReaderCapabilities, readerError } from './readerCompatibility';
 import { observeNativeOperations } from './nativeOperationBaseline';
+import { isHorizontalReader, isNativeContentTools, getHorizontalContext,
+  horizontalLayoutSignature, getHorizontalContents, findHorizontalObjects, readNativeSelection } from './horizontalReaderAdapter';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -12,6 +14,10 @@ let cachedRenderVersion = null;
 let bridgeLayoutVersion = 0;
 let lastLayoutSignature = '';
 let capturedWebpackRequire = null;
+let cachedContentTools = null;
+let observedReader = null;
+let nativeSelection = null;
+const readerObserverRestorations = [];
 const capturedVueInstances = [];
 const mappingDiagnostics = {
   batchCalls: 0,
@@ -126,7 +132,8 @@ const getReaderChapterUid = (reader) =>
 const isReader = (value) =>
   value &&
   !value._isDestroyed &&
-  (value.$options?.name === 'reader' ||
+  value.$el?.isConnected !== false &&
+  (value.$options?.name === 'reader' || isHorizontalReader(value) ||
     READER_DISCOVERY_METHODS.every((key) => typeof value[key] === 'function'));
 
 const READER_DISCOVERY_METHODS = ['handleClickUnderline', 'findObjsInOffsetRange'];
@@ -156,6 +163,15 @@ const captureWebpackRequire = () => {
   if (typeof window.webpackJsonp?.push !== 'function') return null;
   let webpackRequire = null;
   try {
+    const id = `wxrc_probe_${Date.now()}`;
+    window.webpackJsonp.push([[id], {
+      [id]: (_module, _exports, runtimeRequire) => {
+        webpackRequire = runtimeRequire;
+        capturedWebpackRequire = runtimeRequire;
+      },
+    }, [[id]]]);
+    if (webpackRequire) return webpackRequire;
+    // Legacy JSONP runtimes and isolated fixtures use a callback payload.
     window.webpackJsonp.push([
       [`wxrc_${Date.now()}`],
       {},
@@ -207,13 +223,91 @@ const findReader = () => {
     }
     reader = findReaderInVueTree(moduleSeeds);
   }
+  if (cachedReader && cachedReader !== reader) invalidateLayout('reader-instance-changed');
   cachedReader = reader;
+  if (observedReader && observedReader !== reader) observeReader(null);
   return reader;
+};
+
+const findContentTools = () => {
+  if (isNativeContentTools(cachedContentTools)) return cachedContentTools;
+  const runtime = captureWebpackRequire();
+  for (const module of Object.values(runtime?.c || {}).slice(0, 2000)) {
+    try {
+      for (const value of [module?.exports, module?.exports?.default]) {
+        if (isNativeContentTools(value)) return (cachedContentTools = value);
+      }
+    } catch (_error) { /* Ignore uninitialized harmony getters. */ }
+  }
+  return null;
+};
+
+const readerRenderSignature = reader => isHorizontalReader(reader)
+  ? horizontalLayoutSignature(reader) : reader.renderContentsVersion;
+
+const selectionLayoutSignature = reader => JSON.stringify([
+  readerRenderSignature(reader), window.innerWidth, window.innerHeight,
+  document.querySelector('.wr_canvasContainer')?.clientWidth,
+  document.querySelector('.wr_canvasContainer')?.clientHeight,
+]);
+
+const mappingCapabilities = reader => {
+  if (!isHorizontalReader(reader)) return detectReaderCapabilities(reader, document.querySelector('.wr_canvasContainer'));
+  if (!document.querySelector('.wr_canvasContainer')) return { mappingAvailable: false, code: 'CANVAS_UNAVAILABLE' };
+  if (!isNativeContentTools(findContentTools()) || typeof reader.getCurrentDisplayRenderContents !== 'function') {
+    return { mappingAvailable: false, code: 'READER_METHODS_MISSING' };
+  }
+  return { mappingAvailable: true, code: 'READY', mode: 'horizontal' };
+};
+
+const observeReader = reader => {
+  if (reader === observedReader) return;
+  for (const restore of readerObserverRestorations.splice(0).reverse()) {
+    try { restore(); } catch (_error) { /* A destroyed native instance may be frozen. */ }
+  }
+  nativeSelection = null;
+  observedReader = reader;
+  if (!reader) return;
+  const wrap = (owner, key, before, after) => {
+    if (!owner || typeof owner[key] !== 'function') return;
+    const descriptor = Object.getOwnPropertyDescriptor(owner, key);
+    const original = owner[key];
+    const wrapped = function (...args) {
+      try { before?.(args); } catch (_error) { nativeSelection = null; }
+      const result = original.apply(this, args);
+      try { after?.(args); } catch (_error) { nativeSelection = null; }
+      return result;
+    };
+    try {
+      Object.defineProperty(owner, key, descriptor && 'value' in descriptor
+        ? { ...descriptor, value: wrapped } : { configurable: true, writable: true, value: wrapped });
+      readerObserverRestorations.push(() => {
+        // Do not overwrite a later native replacement.
+        if (owner[key] !== wrapped) return;
+        if (descriptor) Object.defineProperty(owner, key, descriptor);
+        else delete owner[key];
+      });
+    } catch (_error) { /* Observation is optional; native methods take priority. */ }
+  };
+  const capture = objects => {
+    const selection = readNativeSelection(reader, findContentTools(), objects);
+    const visible = isHorizontalReader(reader) ? getHorizontalContext(reader).visibleChapterUids : [getReaderChapterUid(reader)];
+    nativeSelection = selection && visible.includes(selection.chapterUid)
+      ? { ...selection, bookId: normalizeChapterUid(reader.bookId), signature: selectionLayoutSignature(reader), layoutVersion: bridgeLayoutVersion } : null;
+  };
+  wrap(reader, 'selectObjs', null, args => capture(args[0]));
+  wrap(reader, 'clearSelection', () => { nativeSelection = null; });
+  if (isHorizontalReader(reader)) {
+    wrap(reader, 'showSelectionToolBar', null, args => capture(args[0]?.objs));
+    wrap(reader, 'setCurrentChapterRenderContents', () => invalidateLayout('reader-page-changed'));
+    wrap(reader, 'changeChapter', () => invalidateLayout('reader-chapter-changed'));
+    wrap(reader.$refs?.readerFloatReviewPanel, 'show', null, args => capture(args[0]?.objs));
+  }
 };
 
 const getCapabilities = () => {
   try {
-    return detectReaderCapabilities(findReader(), document.querySelector('.wr_canvasContainer'));
+    return mappingCapabilities(findReader());
   } catch (_error) {
     return { mappingAvailable: false, code: 'READER_INSPECTION_FAILED' };
   }
@@ -224,6 +318,7 @@ const invalidateLayout = (reason, notify = true) => {
   cachedRenderContents = null;
   cachedChapterUid = '';
   cachedRenderVersion = null;
+  nativeSelection = null;
   if (notify) {
     window.postMessage(
       { source: RESPONSE_SOURCE, type: 'LAYOUT_INVALIDATED', reason },
@@ -234,7 +329,7 @@ const invalidateLayout = (reason, notify = true) => {
 
 const captureRenderContents = (chapterUid, probeRange) => {
   const reader = findReader();
-  const capabilities = detectReaderCapabilities(reader, document.querySelector('.wr_canvasContainer'));
+  const capabilities = mappingCapabilities(reader);
   if (!capabilities.mappingAvailable) throw readerError(capabilities.code);
 
   const actualChapterUid = getReaderChapterUid(reader);
@@ -244,11 +339,12 @@ const captureRenderContents = (chapterUid, probeRange) => {
 
   const start = probeRange?.start ?? 0;
   const end = probeRange?.end ?? start + 1;
-  const captured = captureReaderRenderContents(reader, start, end);
+  const captured = isHorizontalReader(reader)
+    ? getHorizontalContents(reader, chapterUid) : captureReaderRenderContents(reader, start, end);
   cachedReader = reader;
   cachedRenderContents = captured;
   cachedChapterUid = normalizeChapterUid(chapterUid);
-  cachedRenderVersion = reader.renderContentsVersion;
+  cachedRenderVersion = readerRenderSignature(reader);
   bridgeLayoutVersion += 1;
   return captured;
 };
@@ -302,7 +398,7 @@ const getRectsForReviews = (chapterUid, reviews) => {
   if (actualChapterUid && actualChapterUid !== normalizedChapterUid) throw readerError('CHAPTER_MISMATCH');
   const renderVersionChanged =
     cachedRenderVersion !== null &&
-    reader.renderContentsVersion !== cachedRenderVersion;
+    readerRenderSignature(reader) !== cachedRenderVersion;
   if (
     !cachedRenderContents ||
     cachedChapterUid !== normalizedChapterUid ||
@@ -324,14 +420,17 @@ const getRectsForReviews = (chapterUid, reviews) => {
   const results = reviews.map((review) => {
     try {
       mappingDiagnostics.findObjsInOffsetRangeCalls += 1;
-      const objects = reader.findObjsInOffsetRange(
+      const objects = isHorizontalReader(reader)
+        ? findHorizontalObjects(findContentTools(), cachedRenderContents, review.start, review.end, normalizedChapterUid)
+        : reader.findObjsInOffsetRange(
         cachedRenderContents,
         review.start,
         review.end
       );
       if (!Array.isArray(objects)) throw readerError('READER_RESULT_INVALID');
       mappingDiagnostics.getRectsByContentObjsCalls += 1;
-      const rawRects = reader.getRectsByContentObjs(objects);
+      const rawRects = isHorizontalReader(reader)
+        ? findContentTools().getRectsByContentObjs(objects) : reader.getRectsByContentObjs(objects);
       if (!Array.isArray(rawRects)) throw readerError('READER_RESULT_INVALID');
       const rects = rawRects
         .map(serializeRect)
@@ -441,6 +540,24 @@ window.addEventListener('message', (event) => {
       requestId: message.requestId, context }, '*');
     return;
   }
+  if (message.type === 'GET_READER_INTERACTION_CONTEXT') {
+    let context = null;
+    try {
+      const reader = findReader();
+      observeReader(reader);
+      if (reader) {
+        const modeContext = isHorizontalReader(reader) ? getHorizontalContext(reader)
+          : { mode: 'vertical', visibleChapterUids: [getReaderChapterUid(reader)] };
+        if (nativeSelection && (reader._isDestroyed || nativeSelection.bookId !== normalizeChapterUid(reader.bookId) || nativeSelection.signature !== selectionLayoutSignature(reader) ||
+          nativeSelection.layoutVersion !== bridgeLayoutVersion || !modeContext.visibleChapterUids.includes(nativeSelection.chapterUid))) nativeSelection = null;
+        context = { bookId: normalizeChapterUid(reader.bookId), chapterUid: getReaderChapterUid(reader),
+          ...modeContext, layoutVersion: bridgeLayoutVersion,
+          selection: nativeSelection ? { chapterUid: nativeSelection.chapterUid, range: nativeSelection.range, text: nativeSelection.text } : null };
+      }
+    } catch (_error) { nativeSelection = null; }
+    window.postMessage({ source: RESPONSE_SOURCE, type: 'READER_INTERACTION_CONTEXT_RESULT', requestId: message.requestId, context }, '*');
+    return;
+  }
   if (message.type !== 'GET_RECTS_BATCH') return;
 
   try {
@@ -481,11 +598,12 @@ const getLayoutSignature = () => {
   const capabilities = getCapabilities();
   if (!capabilities.mappingAvailable) return capabilities.code;
   const reader = findReader();
+  if (isHorizontalReader(reader)) observeReader(reader);
   const container = document.querySelector('.wr_canvasContainer');
   if (!reader || !container) return '';
   return [
     getReaderChapterUid(reader),
-    reader.renderContentsVersion,
+    readerRenderSignature(reader),
     container.clientWidth,
     container.clientHeight,
   ].join(':');
