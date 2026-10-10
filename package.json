@@ -11,6 +11,9 @@
     "build": "node utils/build.js",
     "test": "node --test tests/*.test.cjs",
     "test:browser:m4": "node tests/m4-browser-smoke.cjs",
+    "test:browser:m5": "node tests/m5-browser-regression.cjs",
+    "test:browser": "node utils/acceptance.cjs --browser-only",
+    "test:acceptance": "node utils/acceptance.cjs",
     "start": "node utils/webserver.js",
     "prettier": "prettier --write '**/*.{js,jsx,ts,tsx,json,css,scss,md}'"
   },

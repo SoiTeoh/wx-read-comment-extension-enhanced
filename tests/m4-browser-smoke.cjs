@@ -22,7 +22,7 @@ showSelectionToolBar(){window.nativeToolbarCalls=(window.nativeToolbarCalls||0)+
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'wxrc-m4-fixture-'));
   const extension = path.resolve(__dirname, '../build');
   const context = await chromium.launchPersistentContext(profile, {
-    channel: 'chromium', headless: false, viewport: { width: 1440, height: 1000 },
+    channel: 'chromium', headless: process.env.WXRC_HEADLESS === '1', viewport: { width: 1440, height: 1000 },
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
   });
   let reviewRequests = 0;

@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版的上下滚动阅读模式。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前版本：**v1.4.0-beta.1**。本版已完成 M0–M4；M5–M6 仍按开发计划推进。更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
+当前已发布版本：**v1.4.0-beta.1**（M0–M4）。增强分支已补充 M5 自动化验收与分页生命周期修复，真实登录态按本地手工清单复核；M6 待开始。更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
 
 ## 主要功能
 
@@ -111,14 +111,16 @@ M1 已加入参考 [Material You 设计说明](https://source.android.com/docs/c
 | M2 · popup 与 badge | 改进键盘焦点、关闭行为、边缘定位和相邻 badge 的可辨识度 | 多评论同 range、重合原生划线、字号变化和切章均正确；原生点击不被抢占 | 已完成；离线几何测试与本地 Reader 回归通过 |
 | M3 · 评论浏览 | 增加非破坏性的评论过滤／密度控制，并评估“当前视口评论”模式 | 筛选不重新请求接口，不丢失原有评论；滚动热路径不执行 range 映射 | 已完成；离线及桌面 Playwright Chromium 真实登录态 Reader 验收通过，见 [验收记录](docs/m3-real-reader-acceptance.md) |
 | M4 · 兼容性 | 对 Reader runtime 做能力检测和失败提示，减少对页面内部结构变化的脆弱性 | 不兼容时安全降级，不影响原生阅读；不使用 DOM Range、EPUB 重排或模糊匹配补位 | 已完成；30 项离线回归、7 项 Chromium 隔离故障检查及真实登录态上下滚动 Reader 回归通过，见 [M4 验收记录](docs/m4-compatibility-acceptance.md) |
-| M5 · 自动化验收 | 补充 UI、生命周期与性能回归；真实登录态测试仅在本地手动执行 | 覆盖分页、设置持久化、跨章、字号、日夜模式、非重合点击及重合 badge；不保存凭据 | 待开始 |
+| M5 · 自动化验收 | 补充 UI、生命周期与性能回归；真实登录态测试仅在本地手动执行 | 覆盖分页、设置持久化、跨章、字号、日夜模式、非重合点击及重合 badge；不保存凭据 | 自动化已完成：33 项离线测试、15 项 M5 Chromium 场景通过；真实登录态本轮未复核，见 [M5 验收与手工清单](docs/m5-automation-acceptance.md) |
 | M6 · 发布准备 | 清理调试残留、更新截图与文档、复核权限和打包 | 静态检查及本地 Reader 验收通过，build 与 zip 内容一致，再决定是否发布 | 待开始 |
 
-实施原则：继续只读取公开评论，不新增点赞、回复、发布等写操作；保留微信读书原生划线和现有 range→rect 路径。每阶段应先补可重复的验证，再进行最小范围的修改。M4 已完成；M5–M6 仍在规划中，具体交互以阶段验收结果调整。
+实施原则：继续只读取公开评论，不新增点赞、回复、发布等写操作；保留微信读书原生划线和现有 range→rect 路径。每阶段应先补可重复的验证，再进行最小范围的修改。M5 自动化已完成，真实登录态按本地手工清单复核；M6 待开始。
 
 M4 在调用原生映射前检测 Reader 方法、正文画布与临时捕获能力；不兼容时撤掉插件划线、popup 和定位索引，侧栏仍可浏览已加载公开评论。提示区的「重试定位」及布局恢复复用已加载评论，不重新请求评论接口。临时替换的 Reader 方法会恢复原始属性描述符；Reader 发现使用有界 Vue／webpack 缓存遍历，不依赖固定模块编号。bridge 超时、章节不匹配或原生返回格式变化均显示可恢复的提示，不使用其他文本映射补位。
 
 本地离线回归可运行 `npm test`；测试使用模拟的公开评论响应，不连接微信读书，也不读取登录凭据。涉及真实 Reader 布局、字号和鼠标命中的项目仍需在已登录的本地浏览器单独验收。
+
+完整受控回归运行 `npm run test:acceptance`，顺序执行离线测试、类型检查、构建与 M4／M5 Chromium 夹具。Playwright 安装在独立工具目录，安装步骤、性能判定和真实登录态手工清单见 [M5 验收记录](docs/m5-automation-acceptance.md)。
 
 ## 来源与许可
 

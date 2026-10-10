@@ -87,3 +87,21 @@ test('M4 映射异常保留错误码，过期失败响应不覆盖新章节', as
     } else assert.equal(stats.compatibility.code, 'READER_RESULT_INVALID');
   }
 });
+
+test('M5 过期成功映射的章节、epoch 或版本错误均不能重建定位索引', async () => {
+  for (const scenario of ['chapter', 'epoch', 'version', 'invalidated']) {
+    const h = harness();
+    const pending = h.api.renderPublicReviewUnderlines(reviews, '12');
+    h.reply({ type: 'CAPABILITIES_RESULT', capabilities: { mappingAvailable: true, code: 'READY' } });
+    await Promise.resolve();
+    const request = h.messages.at(-1);
+    if (scenario === 'invalidated') h.api.invalidatePublicReviewLayout('test-resize');
+    h.reply({ type: 'RECTS_RESULT', requestId: request.requestId, chapterUid: scenario === 'chapter' ? '13' : '12',
+      clientLayoutEpoch: scenario === 'epoch' ? request.clientLayoutEpoch + 1 : request.clientLayoutEpoch,
+      layoutVersion: scenario === 'version' ? null : 1,
+      results: [{ reviewId: '12:0-5', rects: [{ x: 1, y: 2, w: 10, h: 20 }] }],
+    });
+    assert.equal((await pending).staleDiscarded, true, scenario);
+    assert.equal(h.api.getPublicReviewSyncProps().mappedReviewIds.size, 0, scenario);
+  }
+});
