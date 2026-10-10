@@ -1,6 +1,7 @@
 import { captureReaderRenderContents, detectReaderCapabilities, readerError } from './readerCompatibility';
 import { observeNativeOperations } from './nativeOperationBaseline';
 import { getReaderMode, readVerticalSelection } from './readerMode';
+import { createTextOperationSession } from './nativeTextOperations';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -294,6 +295,7 @@ const getCapabilities = () => {
 };
 
 const invalidateLayout = (reason, notify = true) => {
+  textOperations.clear();
   bridgeLayoutVersion += 1;
   cachedRenderContents = null;
   cachedChapterUid = '';
@@ -477,6 +479,18 @@ const getRectsForReviews = (chapterUid, reviews) => {
   };
 };
 
+const textOperations = createTextOperationSession({
+  getReader: findReader, getMode: readingMode, getChapterUid: getReaderChapterUid,
+  getSignature: selectionLayoutSignature, getLayoutVersion: () => bridgeLayoutVersion,
+  validateRects: rects => rects.map(serializeRect).every(r => [r.x, r.y, r.w, r.h].every(Number.isFinite) && r.w > 0 && r.h > 0),
+  getObjects: (reader, chapterUid, range) => {
+    const contents = cachedReader === reader && cachedChapterUid === chapterUid &&
+      cachedRenderContents && cachedRenderVersion === readerRenderSignature(reader)
+      ? cachedRenderContents : captureRenderContents(chapterUid, range);
+    return reader.findObjsInOffsetRange(contents, range.start, range.end);
+  },
+});
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   const message = event.data;
@@ -512,6 +526,17 @@ window.addEventListener('message', (event) => {
   }
   if (message.type === 'GET_READER_MODE') {
     window.postMessage({ source: RESPONSE_SOURCE, type: 'READER_MODE_RESULT', requestId: message.requestId, mode: updateReaderMode() }, '*');
+    return;
+  }
+  if (message.type === 'PREPARE_TEXT_OPERATIONS' || message.type === 'EXECUTE_TEXT_OPERATION') {
+    const type = message.type === 'PREPARE_TEXT_OPERATIONS' ? 'TEXT_OPERATIONS_RESULT' : 'TEXT_OPERATION_RESULT';
+    void Promise.resolve().then(() => message.type === 'PREPARE_TEXT_OPERATIONS'
+      ? textOperations.prepare(message) : textOperations.execute(message.token, message.operation))
+      .then(result => window.postMessage({ source: RESPONSE_SOURCE, type, requestId: message.requestId, result }, '*'))
+      .catch(error => window.postMessage({ source: RESPONSE_SOURCE, type, requestId: message.requestId,
+        error: ['READING_MODE_DISABLED', 'CHAPTER_CHANGED', 'INVALID_RANGE', 'ORIGINAL_TEXT_UNAVAILABLE',
+          'CONTEXT_EXPIRED', 'UNKNOWN_OPERATION', 'OPERATION_BUSY', 'LOGIN_REQUIRED', 'AI_UNAVAILABLE',
+          'NATIVE_ENTRY_UNAVAILABLE', 'NATIVE_RESULT_INVALID'].includes(error.message) ? error.message : 'NATIVE_OPERATION_FAILED' }, '*'));
     return;
   }
   if (message.type === 'GET_NATIVE_OPERATION_BASELINE') {

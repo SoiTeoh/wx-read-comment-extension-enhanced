@@ -37,6 +37,7 @@ const harness = () => {
       if (name === './debug') return { debugLog() {} };
       if (name === './readerCompatibility') return compatibility;
       if (name === './popupBadgeLayout') return layout;
+      if (name === './nativeTextToolbar') return {};
       throw new Error(name);
     },
   });

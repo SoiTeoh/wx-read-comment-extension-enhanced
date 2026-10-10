@@ -2,6 +2,7 @@ import { getReview } from './utils';
 import { debugLog } from './debug';
 import { badgeWidthForCount, positionBadge, positionPopup } from './popupBadgeLayout';
 import { compatibilityFailure } from './readerCompatibility';
+import { createNativeTextToolbar } from './nativeTextToolbar';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -148,7 +149,7 @@ const onPageMessage = (event) => {
   }
 
   if (
-    !['PONG', 'RECTS_RESULT', 'CAPABILITIES_RESULT'].includes(message.type) ||
+    !['PONG', 'RECTS_RESULT', 'CAPABILITIES_RESULT', 'TEXT_OPERATIONS_RESULT', 'TEXT_OPERATION_RESULT'].includes(message.type) ||
     typeof message.requestId !== 'string'
   ) {
     return;
@@ -231,7 +232,7 @@ const appendTextBlock = (parent, className, text) => {
   parent.appendChild(node);
 };
 
-const showPopup = (event, reviews) => {
+const showPopup = (event, reviews, group) => {
   removePopup();
   const trigger = event.currentTarget instanceof HTMLElement
     ? event.currentTarget
@@ -255,6 +256,19 @@ const showPopup = (event, reviews) => {
   close.addEventListener('click', () => removePopup(true));
   toolbar.append(count, close);
   popup.appendChild(toolbar);
+
+  const reposition = () => {
+    if (!popup.isConnected) return;
+    const rect = popup.getBoundingClientRect();
+    const position = positionPopup({ x: event.clientX, y: event.clientY },
+      { width: rect.width, height: rect.height }, { width: window.innerWidth, height: window.innerHeight });
+    popup.style.left = `${position.left}px`; popup.style.top = `${position.top}px`;
+  };
+  if (group) {
+    const operations = createNativeTextToolbar({ popup, group, request: sendPageRequest,
+      close: () => removePopup(), reposition });
+    popup.append(operations.toolbar, operations.quote, operations.status);
+  }
 
   for (const review of reviews) {
     const item = document.createElement('div');
@@ -292,7 +306,7 @@ const openGroupPopup = (event, group) => {
   event.preventDefault();
   event.stopPropagation();
   if (sidebarVisible) setActiveRange(group.key);
-  showPopup(event, group.reviews);
+  showPopup(event, group.reviews, group);
 };
 
 const setHoveredRange = (rangeKey) => {
@@ -856,7 +870,7 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
       }
 
       mappedRangeCount += 1;
-      const rangeEntry = { key: group.key, reviews: group.reviews, rects, wrappers: [] };
+      const rangeEntry = { key: group.key, range: group.range, reviews: group.reviews, rects, wrappers: [] };
       nextIndex.ranges.set(group.key, rangeEntry);
       for (const review of group.reviews) {
         const reviewId = getReviewId(review);

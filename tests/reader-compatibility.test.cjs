@@ -18,6 +18,10 @@ Object.assign(helper.exports, baselineHelper.exports);
 const modeHelper = new Module(modulePath, module);
 modeHelper._compile(compile('readerMode.js'), modulePath);
 Object.assign(helper.exports, modeHelper.exports);
+const operationsHelper = new Module(modulePath, module);
+operationsHelper.require = name => name === './readerMode' ? modeHelper.exports : require(name);
+operationsHelper._compile(compile('nativeTextOperations.js'), modulePath);
+Object.assign(helper.exports, operationsHelper.exports);
 const { detectReaderCapabilities, captureReaderRenderContents } = helper.exports;
 const bridgeCode = compile('pageBridge.js');
 

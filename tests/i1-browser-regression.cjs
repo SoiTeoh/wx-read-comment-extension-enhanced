@@ -27,7 +27,8 @@ window.switchMode=next=>{fixtureReader.$el.isConnected=false;window.mode=next;fi
 window.switchChapter=uid=>{fixtureReader.currentChapterUid=uid;fixtureReader.renderContentsVersion++;document.querySelector('.readerTopBar_title_chapter').textContent='章节'+uid;history.pushState({},'',location.pathname+'?bookId=123&chapterUid='+uid);dispatchEvent(new PopStateEvent('popstate'))};
 </script>`;
 
-(async () => {
+module.exports = { fixture };
+if (require.main === module) (async () => {
   fs.mkdirSync(output, { recursive: true });
   const extension = path.resolve(__dirname, '../build');
   const context = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'wxrc-i1-vertical-')), {
