@@ -231,7 +231,8 @@ const start = async () => {
         bookId: book.value,
         chapterUid: chapter.chapterUid,
         listType: 8,
-      }, () => activeChapterUid === chapter.chapterUid);
+      }, async () => activeChapterUid === chapter.chapterUid &&
+        (await resolveCurrentChapter(catalog.chapters))?.chapterUid === chapter.chapterUid);
       const filtered = filterReviewsByChapterUid(response, chapter.chapterUid);
       const allReviews = response.reviews || [];
       const missingChapterUid = allReviews.filter(

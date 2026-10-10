@@ -153,3 +153,26 @@ test('评论列表 HTTP 错误直接报告，不继续分页', async (t) => {
   t.mock.method(global, 'fetch', async () => ({ ok: false, status: 503 }));
   await assert.rejects(getCommentData({ bookId: 'book' }), /HTTP 503/);
 });
+
+test('M5 异步章节检查在切章后停止分页，不继续下载旧章', async (t) => {
+  let current = true;
+  let fetchCount = 0;
+  t.mock.method(global, 'fetch', async () => {
+    fetchCount++;
+    current = false;
+    return { ok: true, json: async () => ({ reviews: [item('old', 12)], hasMore: 1, synckey: 2 }) };
+  });
+  const result = await getAllCommentData({ bookId: 'book', chapterUid: 12 }, async () => current);
+  assert.equal(fetchCount, 1);
+  assert.equal(result.paginationStoppedReason, 'chapter-changed');
+  assert.deepEqual(result.reviews, []);
+});
+
+test('M5 请求前异步章节检查失败时不发评论请求', async (t) => {
+  let requests = 0;
+  t.mock.method(global, 'fetch', async () => { requests++; throw new Error('Should not fetch'); });
+  const result = await getAllCommentData({ bookId: 'book', chapterUid: 12 }, async () => false);
+  assert.equal(requests, 0);
+  assert.equal(result.pageCount, 0);
+  assert.equal(result.paginationStoppedReason, 'chapter-changed');
+});

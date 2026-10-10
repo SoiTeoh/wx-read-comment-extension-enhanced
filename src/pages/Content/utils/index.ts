@@ -577,7 +577,7 @@ export const getCommentData = async (
 // the server explicitly returns it. A short page is not proof of completion.
 export const getAllCommentData = async (
   params: Record<string, string | number>,
-  isCurrent: () => boolean = () => true
+  isCurrent: () => boolean | Promise<boolean> = () => true
 ): Promise<WeReadReviewResponse> => {
   let pageSize = 1000;
   const maxPageSize = 5000;
@@ -590,12 +590,16 @@ export const getAllCommentData = async (
   let stoppedReason = 'hasMore=0';
 
   for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
-    if (!isCurrent()) {
+    if (!(await isCurrent())) {
       stoppedReason = 'chapter-changed';
       break;
     }
     const page = await getCommentData({ ...params, count: pageSize, ...cursor });
     pages.push(page);
+    if (!(await isCurrent())) {
+      stoppedReason = 'chapter-changed';
+      break;
+    }
     let newReviewCount = 0;
     for (const item of page.reviews || []) {
       const review = getReview(item);
