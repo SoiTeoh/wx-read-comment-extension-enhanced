@@ -12,6 +12,9 @@ const compile = (file) => babel.transformFileSync(path.resolve(__dirname, '../sr
 const modulePath = path.resolve(__dirname, '../src/pages/Content/readerCompatibility.js');
 const helper = new Module(modulePath, module);
 helper._compile(compile('readerCompatibility.js'), modulePath);
+const baselineHelper = new Module(modulePath, module);
+baselineHelper._compile(compile('nativeOperationBaseline.js'), modulePath);
+Object.assign(helper.exports, baselineHelper.exports);
 const { detectReaderCapabilities, captureReaderRenderContents } = helper.exports;
 const bridgeCode = compile('pageBridge.js');
 
@@ -69,6 +72,17 @@ test('M4 public context retains identity after initial script removal without ex
   assert.equal(JSON.stringify(result.context), JSON.stringify({ bookId: '638162', chapterUid: '12' }));
   assert.equal(JSON.stringify(result).includes('not-public'), false);
   assert.equal(h.send('GET_CAPABILITIES').capabilities.code, 'READY');
+});
+
+test('I0 bridge returns an independent read-only baseline without mapping or native writes', () => {
+  const reader = createReader();
+  reader.showAiChatPanel = () => { throw new Error('must not call native operation'); };
+  const h = harness(reader);
+  const response = h.send('GET_NATIVE_OPERATION_BASELINE');
+  assert.equal(response.type, 'NATIVE_OPERATION_BASELINE_RESULT');
+  assert.equal(response.baseline.operations.find(x => x.id === 'askAI').observed, true);
+  assert.equal(response.baseline.operations.every(x => !x.callable), true);
+  assert.equal(h.sent.some(x => x.type === 'RECTS_RESULT'), false);
 });
 
 test('M4 能力检测只读，识别缺方法、画布缺失、不可替换方法与恢复', () => {

@@ -1,4 +1,5 @@
 import { captureReaderRenderContents, detectReaderCapabilities, readerError } from './readerCompatibility';
+import { observeNativeOperations } from './nativeOperationBaseline';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -416,6 +417,14 @@ window.addEventListener('message', (event) => {
   if (message.type === 'GET_CAPABILITIES') {
     window.postMessage({ source: RESPONSE_SOURCE, type: 'CAPABILITIES_RESULT',
       requestId: message.requestId, capabilities: getCapabilities() }, '*');
+    return;
+  }
+  if (message.type === 'GET_NATIVE_OPERATION_BASELINE') {
+    let reader = null;
+    try { reader = findReader(); } catch (_error) { /* I0 does not alter mapping availability. */ }
+    const baseline = observeNativeOperations([reader, ...capturedVueInstances.slice().reverse()]);
+    window.postMessage({ source: RESPONSE_SOURCE, type: 'NATIVE_OPERATION_BASELINE_RESULT',
+      requestId: message.requestId, baseline }, '*');
     return;
   }
   if (message.type === 'GET_READER_CONTEXT') {

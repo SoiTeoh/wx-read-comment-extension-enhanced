@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>I0 · 原生阅读操作与想法互动预览</title>
+  <link rel="stylesheet" href="../../src/pages/Content/content.styles.css">
+  <style>
+    body { margin:0; background:#edf0f6; font-family:"Microsoft YaHei",sans-serif; color:#1a1b21; }
+    .demo { max-width:1120px; margin:48px auto; padding:0 28px; }
+    .heading { display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    .eyebrow { color:#4b5f9c; font-size:13px; letter-spacing:2px; }
+    h1 { font-size:28px; margin:12px 0; } .subtitle { color:#555b6b; font-size:14px; line-height:1.8; }
+    .theme { background:#dce3ff; color:#253768; border:1px solid #c4c7d4; border-radius:24px; padding:12px 20px; cursor:pointer; flex-shrink:0; }
+    .scene { margin-top:32px; display:grid; grid-template-columns:1fr 430px; gap:40px; align-items:start; }
+    .book { padding:36px; border-radius:24px; background:#f8f8ff; line-height:2.2; min-height:440px; }
+    .book h2 { font-size:24px; } .book p { font-size:18px; }
+    .book mark { color:inherit; background:#dce3ff; border-bottom:2px dashed #4b5f9c; }
+    .page-note { color:#555b6b; font-size:13px!important; margin-top:36px; }
+    .preview.wxrc_public_review_popup { position:static; width:100%; max-height:none; padding:20px; }
+    .preview .wxrc_public_review_popup_toolbar { font-size:14px; margin-bottom:18px; }
+    .stage { background:var(--wxrc-primary-container); color:var(--wxrc-on-primary-container); padding:5px 10px; border-radius:20px; font-size:11px; }
+    .quote { background:var(--wxrc-surface-high); border-radius:12px; padding:12px; margin-bottom:14px; color:var(--wxrc-on-surface-muted); font-size:13px; }
+    .actions { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:10px 4px; background:var(--wxrc-surface); border-radius:16px; margin-bottom:16px; }
+    .actions button,.interaction button { border:0; background:transparent; color:var(--wxrc-on-surface-muted); font:inherit; cursor:not-allowed; }
+    .actions button { display:flex; flex-direction:column; align-items:center; gap:8px; padding:10px 2px; font-size:12px; }
+    svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    .preview .wxrc_public_review_popup_item { border:0; border-radius:16px; padding:16px; background:var(--wxrc-surface); margin-top:12px; }
+    .avatar { display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:var(--wxrc-primary-container); color:var(--wxrc-on-primary-container); }
+    .wxrc_public_review_popup_content { margin:12px 0 18px; line-height:1.9; }
+    .interaction { display:flex; gap:28px; border-top:1px solid var(--wxrc-outline); padding-top:12px; }
+    .interaction button { display:flex; align-items:center; gap:8px; font-size:13px; }
+    .notice { margin-top:16px; font-size:12px; line-height:1.8; color:var(--wxrc-on-surface-muted); }
+    body:not(.wr_whiteTheme) { background:#11151d; color:#e3e5ef; }
+    body:not(.wr_whiteTheme) .book { background:#171b23; } body:not(.wr_whiteTheme) .subtitle,body:not(.wr_whiteTheme) .page-note { color:#b6bac9; }
+    body:not(.wr_whiteTheme) .book mark { background:#394765; border-color:#b6c4f2; }
+    @media(max-width:800px) { .demo{margin:24px auto;padding:0 16px}.scene{grid-template-columns:1fr;gap:20px}.book{min-height:0;padding:24px}.heading{align-items:flex-start}h1{font-size:22px} }
+  </style>
+</head>
+<body class="wr_whiteTheme">
+<main class="demo">
+  <header class="heading"><div><div class="eyebrow">微信读书评论增强版 · I0</div><h1>原文操作与想法互动</h1><div class="subtitle">沿用现有配色、圆角和卡片样式。先核实原生行为，再逐项接通。</div></div><button class="theme" type="button" onclick="document.body.classList.toggle('wr_whiteTheme')">切换日夜主题</button></header>
+  <div class="scene">
+    <section class="book"><div class="eyebrow">示例正文 · 布局预览</div><h2>阅读，让想法相遇</h2><p>一本书的意义，往往在再次翻开时变得不同。</p><p><mark>读到同一句话的人，也许正在经历不同的人生。</mark></p><p>停下来看看别人的想法，再写下属于自己的理解。</p><p class="page-note">原文操作绑定引用段落；点赞与评论绑定具体想法。<br>此页使用示例内容，未连接真实账户或写接口。</p></section>
+    <section class="wxrc_public_review_popup preview" aria-label="互动布局预览">
+      <div class="wxrc_public_review_popup_toolbar"><span>2 条示例想法</span><span class="stage">I0 · 布局预览</span></div>
+      <div class="quote">读到同一句话的人，也许正在经历不同的人生。</div>
+      <div class="actions" aria-label="原文操作预览">
+        <button disabled title="I2 接通原文复制"><svg viewBox="0 0 24 24"><rect x="8" y="7" width="12" height="14" rx="2"/><path d="M15 3H4v14M11 11h6M11 15h6"/></svg>复制</button>
+        <button disabled title="I2 接通原生划线"><svg viewBox="0 0 24 24"><path d="m6 17 6-14 6 14M9 12h6M4 21h16"/></svg>划线</button>
+        <button disabled title="I2 接通原生想法编辑器"><svg viewBox="0 0 24 24"><path d="M8 18H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-5l-5 3zM7 8h10M7 12h7"/></svg>写想法</button>
+        <button disabled title="I2 接通微信读书 AI 原生入口"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg>AI 问书</button>
+      </div>
+      <article class="wxrc_public_review_popup_item"><div class="wxrc_public_review_popup_author"><span class="avatar">读</span><span>示例读者 A</span></div><div class="wxrc_public_review_popup_content">有时候，别人的一句想法，就能让熟悉的文字多一层含义。</div><div class="interaction"><button disabled title="I3 接通该想法的点赞"><svg viewBox="0 0 24 24"><path d="M20 4a5 5 0 0 0-8 1 5 5 0 0 0-8-1C-2 10 12 21 12 21S26 10 20 4z"/></svg>点赞</button><button disabled title="I3 接通该想法的回复"><svg viewBox="0 0 24 24"><path d="M3 4h18v13H9l-6 4z"/></svg>评论</button></div></article>
+      <article class="wxrc_public_review_popup_item"><div class="wxrc_public_review_popup_author"><span class="avatar">想</span><span>示例读者 B</span></div><div class="wxrc_public_review_popup_content">读书也像对话：先听见，再思考，最后留下自己的回答。</div><div class="interaction"><button disabled><svg viewBox="0 0 24 24"><path d="M20 4a5 5 0 0 0-8 1 5 5 0 0 0-8-1C-2 10 12 21 12 21S26 10 20 4z"/></svg>点赞</button><button disabled><svg viewBox="0 0 24 24"><path d="M3 4h18v13H9l-6 4z"/></svg>评论</button></div></article>
+      <div class="notice" role="status">本阶段只核实原生能力。以上操作尚未接通，按钮已禁用；可切换日夜主题查看效果。</div>
+    </section>
+  </div>
+</main>
+</body></html>
