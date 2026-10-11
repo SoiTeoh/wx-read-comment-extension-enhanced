@@ -1,11 +1,11 @@
 {
   "name": "wxread-comment-enhanced-extension",
-  "version": "1.4.0-beta.1",
+  "version": "1.5.0-beta.1",
   "description": "在微信读书网页版显示公开评论划线，支持点击查看想法，并提供可选评论侧栏与正文定位。",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/my19940202/wx-read-comment-extension"
+    "url": "https://github.com/SoiTeoh/wx-read-comment-extension-enhanced.git"
   },
   "scripts": {
     "build": "node utils/build.js",

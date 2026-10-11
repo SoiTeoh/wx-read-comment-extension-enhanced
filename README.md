@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前已发布版本：**v1.4.0-beta.1**（M0–M4）。开发代码已完成 M5 自动化验收与 I0–I4 互动扩展，见 [I1 纵向上下文与模式隔离](docs/i1-vertical-mode-isolation.md)、[I2 纵向原文操作栏](docs/i2-vertical-text-operations.md)、[I3 纵向想法互动](docs/i3-vertical-review-interactions.md)和 [I4 互动回归](docs/i4-interaction-regression.md)。插件仅在上下滚动模式挂载，进入左右双栏时退出，切回纵向恢复；此前的横向增强已移除。M6 待开始，开发功能尚未发布到安装包，回复最终提交待本地验收。更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
+当前发布候选：**v1.5.0-beta.1**，已完成打包，等待维护者上传 GitHub Release；上一发布版本为 v1.4.0-beta.1。本版汇总 M5 与 I0–I4，支持纵向原文操作和想法互动；仅在上下滚动模式挂载，左右双栏保持官方界面。实现与验收见 [I2 原文操作栏](docs/i2-vertical-text-operations.md)、[I3 想法互动](docs/i3-vertical-review-interactions.md)、[I4 互动回归](docs/i4-interaction-regression.md)和 [M6 发布准备](docs/m6-release-preparation.md)。更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
 
 ## 主要功能
 
@@ -11,7 +11,8 @@
 - 按需显示右侧评论栏：阅读时高亮附近的评论，也可点击可定位的侧栏评论跳到正文。
 - 侧栏支持阅读顺序与接口顺序切换，并继续加载后续页的公开评论。
 - 支持日间／夜间模式；划线、侧栏和跟随阅读位置等设置在刷新后保留。
-- 开发版评论 popup 提供复制、划线、写想法和 AI 问书原文操作栏；侧栏关闭时也可用。复制核实的原文，其他入口交由官方工具或编辑器继续。
+- 评论 popup 提供复制、划线、写想法和 AI 问书原文操作栏；侧栏关闭时也可用。复制核实的原文，其他入口交由官方工具或编辑器继续。
+- 想法卡片支持点赞／取消点赞和官方回复详情入口；请求期间防止重复点击，失败时可手动刷新状态。回复由用户在原生编辑器确认提交。
 
 ## 技术特性
 
@@ -19,6 +20,14 @@
 - 使用章节与 layout version 校验异步映射结果，丢弃过期的结果（stale async result 防护）。
 
 ## 效果预览
+
+### 纵向原文操作与想法互动（v1.5）
+
+保持现有 UI 风格，侧栏关闭时独立使用原文工具栏和卡片互动；左右双栏不显示插件增强。
+
+![纵向原文操作与想法互动](docs/previews/i3-vertical-day.png)
+
+[夜间效果](docs/previews/i3-vertical-night.png) · [窄窗口效果](docs/previews/i4-vertical-narrow.png)
 
 ### 公开评论划线与想法弹窗
 
@@ -90,12 +99,12 @@
 - 仅展示微信读书接口返回的公开评论／公开想法；不读取、模拟或推测私密评论。
 - 微信读书原生划线不一定对应公开评论，原生划线本身不保证可打开插件 popup。
 - 部分历史 `range` 可能因正文版本或 Reader layout 不匹配而无法映射；此类评论仍可在侧栏查看，但不能定位到正文。
-- 已发布安装版仍为只读评论增强；本地 I3 开发版已接入卡片点赞／取消点赞与原生回复入口。“写想法”和“评论”由用户在原生编辑器中确认提交；插件不自建发布编辑器，也不直接调用回复写接口。用户已确认浏览器中点赞可用、回复能打开官方评论页面；回复最终提交尚未验收。
+- v1.5.0-beta.1 安装包已接入卡片点赞／取消点赞与原生回复入口。“写想法”和“评论”由用户在原生编辑器中确认提交；插件不自建发布编辑器，也不直接调用回复写接口。用户已确认浏览器中点赞可用、回复能打开官方评论页面；回复最终提交及真实分页仍未由代理验收。
 - 微信读书前端更新可能影响内部 Reader runtime 的兼容性。
 
 ## 开发状态
 
-Current status: **Local Beta / v1.4.0-beta.1**。
+Current status: **Release candidate / v1.5.0-beta.1**，安装包已准备，GitHub Release 由维护者上传。
 
 当前版本已具备公开评论加载、划线、popup、重合 badge、可选侧栏和正文定位。下面按依赖顺序推进；每个阶段单独验收，不把规划中的功能当作已发布能力。
 
@@ -113,9 +122,9 @@ M1 已加入参考 [Material You 设计说明](https://source.android.com/docs/c
 | M3 · 评论浏览 | 增加非破坏性的评论过滤／密度控制，并评估“当前视口评论”模式 | 筛选不重新请求接口，不丢失原有评论；滚动热路径不执行 range 映射 | 已完成；离线及桌面 Playwright Chromium 真实登录态 Reader 验收通过，见 [验收记录](docs/m3-real-reader-acceptance.md) |
 | M4 · 兼容性 | 对 Reader runtime 做能力检测和失败提示，减少对页面内部结构变化的脆弱性 | 不兼容时安全降级，不影响原生阅读；不使用 DOM Range、EPUB 重排或模糊匹配补位 | 已完成；30 项离线回归、7 项 Chromium 隔离故障检查及真实登录态上下滚动 Reader 回归通过，见 [M4 验收记录](docs/m4-compatibility-acceptance.md) |
 | M5 · 自动化验收 | 补充 UI、生命周期与性能回归；真实登录态测试仅在本地手动执行 | 覆盖分页、设置持久化、跨章、字号、日夜模式、非重合点击及重合 badge；不保存凭据 | 自动化已完成：33 项离线测试、15 项 M5 Chromium 场景通过；真实登录态本轮未复核，见 [M5 验收与手工清单](docs/m5-automation-acceptance.md) |
-| M6 · 发布准备 | 清理调试残留、更新截图与文档、复核权限和打包 | 静态检查及本地 Reader 验收通过，build 与 zip 内容一致，再决定是否发布 | 待开始 |
+| M6 · 发布准备 | 清理调试残留、更新截图与文档、复核权限和打包 | 静态检查及本地 Reader 验收通过，build 与 zip 内容一致，再决定是否发布 | 本轮发布准备完成：v1.5.0-beta.1 版本、文档、权限与安装包核对完成，用户确认测试无问题；Release 待维护者上传，见 [M6 记录](docs/m6-release-preparation.md) |
 
-实施原则：M0–M5 的现有版本保持公开评论只读；新增点赞、回复与发布能力按下方互动扩展计划单独实施和验收。保留微信读书原生划线和现有 range→rect 路径，每阶段先补可重复的验证，再进行最小范围的修改。M5 自动化已完成，真实登录态按本地手工清单复核；先推进互动扩展，再进入 M6 发布准备。
+实施原则：M0–M5 的原始范围为公开评论只读；新增点赞与回复入口按下方 I0–I4 单独实施和验收，并汇总到 v1.5.0-beta.1。保留微信读书原生划线和现有 range→rect 路径，每阶段补充可重复的验证。M6 本轮打包准备完成，真实写入未覆盖的项目继续记录在本地手工清单中。
 
 M4 在调用原生映射前检测 Reader 方法、正文画布与临时捕获能力；不兼容时撤掉插件划线、popup 和定位索引，侧栏仍可浏览已加载公开评论。提示区的「重试定位」及布局恢复复用已加载评论，不重新请求评论接口。临时替换的 Reader 方法会恢复原始属性描述符；Reader 发现使用有界 Vue／webpack 缓存遍历，不依赖固定模块编号。bridge 超时、章节不匹配或原生返回格式变化均显示可恢复的提示，不使用其他文本映射补位。
 
