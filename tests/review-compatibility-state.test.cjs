@@ -38,6 +38,7 @@ const harness = () => {
       if (name === './readerCompatibility') return compatibility;
       if (name === './popupBadgeLayout') return layout;
       if (name === './nativeTextToolbar') return {};
+      if (name === './reviewInteractions') return {};
       throw new Error(name);
     },
   });

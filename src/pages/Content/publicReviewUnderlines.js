@@ -3,6 +3,7 @@ import { debugLog } from './debug';
 import { badgeWidthForCount, positionBadge, positionPopup } from './popupBadgeLayout';
 import { compatibilityFailure } from './readerCompatibility';
 import { createNativeTextToolbar } from './nativeTextToolbar';
+import { appendReviewActions, isReviewDetailOpen } from './reviewInteractions';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -38,6 +39,7 @@ let showPublicUnderlines = true;
 let sidebarVisible = true;
 let publicReviewIndex = createEmptyIndex();
 let popupReturnFocus = null;
+let popupCleanups = [];
 let readerCompatibility = null;
 let enhancementEnabled = true;
 
@@ -71,6 +73,7 @@ const createRequestId = () =>
     .slice(2, 8)}`;
 
 const removePopup = (restoreFocus = false) => {
+  for (const cleanup of popupCleanups.splice(0)) cleanup();
   document.querySelectorAll(`.${POPUP_CLASS}`).forEach((node) => node.remove());
   const returnFocus = popupReturnFocus;
   popupReturnFocus = null;
@@ -287,6 +290,7 @@ const showPopup = (event, reviews, group) => {
     item.appendChild(header);
     appendTextBlock(item, 'wxrc_public_review_popup_abstract', review.abstract);
     appendTextBlock(item, 'wxrc_public_review_popup_content', review.content);
+    popupCleanups.push(appendReviewActions(item, String(review.reviewId || '')));
     popup.appendChild(item);
   }
 
@@ -707,6 +711,7 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
   document.addEventListener('pointermove', onDocumentPointerMove, { passive: true });
   updateSidebarScrollListener();
   document.addEventListener('click', (event) => {
+    if (isReviewDetailOpen()) return;
     if (
       !event.target.closest(`.${POPUP_CLASS}`) &&
       !event.target.closest('.wxrc_public_review_wrapper')
@@ -715,13 +720,13 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
     }
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && document.querySelector(`.${POPUP_CLASS}`)) {
+    if (event.key === 'Escape' && !isReviewDetailOpen() && document.querySelector(`.${POPUP_CLASS}`)) {
       event.preventDefault();
       event.stopPropagation();
       removePopup(true);
     }
   });
-  window.addEventListener('scroll', () => removePopup(), { passive: true });
+  window.addEventListener('scroll', () => { if (!isReviewDetailOpen()) removePopup(); }, { passive: true });
 };
 
 export const probePublicReviewCompatibility = async () => {

@@ -22,6 +22,9 @@ const operationsHelper = new Module(modulePath, module);
 operationsHelper.require = name => name === './readerMode' ? modeHelper.exports : require(name);
 operationsHelper._compile(compile('nativeTextOperations.js'), modulePath);
 Object.assign(helper.exports, operationsHelper.exports);
+const reviewsHelper = new Module(modulePath, module);
+reviewsHelper._compile(compile('nativeReviewOperations.js'), modulePath);
+Object.assign(helper.exports, reviewsHelper.exports);
 const { detectReaderCapabilities, captureReaderRenderContents } = helper.exports;
 const bridgeCode = compile('pageBridge.js');
 

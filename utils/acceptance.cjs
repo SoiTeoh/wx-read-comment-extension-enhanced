@@ -15,6 +15,7 @@ const gates = [
   ['M5 UI, lifecycle and performance', ['tests/m5-browser-regression.cjs']],
   ['I1 vertical context and reading mode isolation', ['tests/i1-browser-regression.cjs']],
   ['I2 vertical original text operations', ['tests/i2-browser-regression.cjs']],
+  ['I3 vertical thought interactions', ['tests/i3-browser-regression.cjs']],
 ];
 for (const [name, args] of gates) {
   console.log(`\nAcceptance gate: ${name}`);

@@ -2,6 +2,7 @@ import { captureReaderRenderContents, detectReaderCapabilities, readerError } fr
 import { observeNativeOperations } from './nativeOperationBaseline';
 import { getReaderMode, readVerticalSelection } from './readerMode';
 import { createTextOperationSession } from './nativeTextOperations';
+import { createReviewOperations } from './nativeReviewOperations';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -491,6 +492,17 @@ const textOperations = createTextOperationSession({
   },
 });
 
+const reviewOperations = createReviewOperations({
+  getReader: findReader, getMode: readingMode, getChapterUid: getReaderChapterUid,
+  isPanelVisible: panel => Boolean(panel.$el?.getBoundingClientRect?.().width),
+  readReview: async reviewId => {
+    const response = await fetch(`/web/review/single?reviewId=${encodeURIComponent(reviewId)}`, { credentials: 'same-origin' });
+    if (!response.ok) throw Error(response.status === 401 || response.status === 403 ? 'LOGIN_REQUIRED' : 'REVIEW_READ_FAILED');
+    return response.json();
+  },
+  onDetailClosed: result => window.postMessage({ source: RESPONSE_SOURCE, type: 'REVIEW_DETAIL_CLOSED', ...result }, '*'),
+});
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   const message = event.data;
@@ -526,6 +538,20 @@ window.addEventListener('message', (event) => {
   }
   if (message.type === 'GET_READER_MODE') {
     window.postMessage({ source: RESPONSE_SOURCE, type: 'READER_MODE_RESULT', requestId: message.requestId, mode: updateReaderMode() }, '*');
+    return;
+  }
+  if (message.type === 'REGISTER_REVIEW_INTERACTIONS' || message.type === 'EXECUTE_REVIEW_OPERATION') {
+    void Promise.resolve().then(() => message.type === 'REGISTER_REVIEW_INTERACTIONS'
+      ? reviewOperations.register(message) : reviewOperations.execute(message))
+      .then(result => window.postMessage({ source: RESPONSE_SOURCE, type: 'REVIEW_OPERATION_RESULT', requestId: message.requestId, result }, '*'))
+      .catch(error => window.postMessage({ source: RESPONSE_SOURCE, type: 'REVIEW_OPERATION_RESULT', requestId: message.requestId,
+        error: ['CONTEXT_EXPIRED', 'REVIEW_TARGET_INVALID', 'LOGIN_REQUIRED', 'UNKNOWN_OPERATION', 'OPERATION_BUSY',
+          'NATIVE_ENTRY_UNAVAILABLE', 'LIKE_REJECTED', 'LIKE_RESULT_UNKNOWN', 'LIKE_APPLIED_STATE_UNKNOWN',
+          'REVIEW_READ_FAILED'].includes(error.message) ? error.message : 'REVIEW_OPERATION_FAILED' }, '*'));
+    return;
+  }
+  if (message.type === 'CLEAR_REVIEW_INTERACTIONS') {
+    reviewOperations.clear();
     return;
   }
   if (message.type === 'PREPARE_TEXT_OPERATIONS' || message.type === 'EXECUTE_TEXT_OPERATION') {
@@ -630,6 +656,7 @@ const getLayoutSignature = () => {
 };
 
 window.setInterval(() => {
+  try { reviewOperations.poll(); } catch (_error) { /* Native UI replacement must not affect reading. */ }
   updateReaderMode();
   let signature;
   try { signature = getLayoutSignature(); } catch (_error) { signature = 'READER_INSPECTION_FAILED'; }

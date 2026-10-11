@@ -782,6 +782,14 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     font-size: 13px;
 }
 .wxrc_text_operation_status { color: var(--wxrc-on-surface-muted); font-size: 12px; margin: 8px 0 14px; }
+.wxrc_review_actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--wxrc-outline); }
+.wxrc_review_actions button { min-height: 32px; padding: 5px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--wxrc-primary); font: inherit; font-size: 13px; cursor: pointer; }
+.wxrc_review_actions button:hover:not(:disabled) { background: var(--wxrc-state); }
+.wxrc_review_actions button:disabled { opacity: .5; cursor: default; }
+.wxrc_review_actions button:focus-visible { outline: 2px solid var(--wxrc-primary); outline-offset: 2px; }
+.wxrc_review_actions button[aria-pressed="true"] { background: var(--wxrc-primary-container); color: var(--wxrc-on-primary-container); }
+.wxrc_review_action_status { flex-basis: 100%; color: var(--wxrc-on-surface-muted); font-size: 12px; }
+.wxrc_review_action_status:empty { display: none; }
 @media (max-width: 420px) { .wxrc_text_operations { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .wxrc_browse_controls input[type="search"] {
     width: 100%;

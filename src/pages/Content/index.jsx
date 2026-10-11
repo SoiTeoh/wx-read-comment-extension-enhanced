@@ -12,6 +12,7 @@ import {
   resolveReaderMode,
 } from './utils';
 import './content.styles.css';
+import { activateReviewInteractions, clearReviewInteractions } from './reviewInteractions';
 import {
   clearPublicReviewState,
   getPublicReviewSyncProps,
@@ -72,6 +73,7 @@ const start = async (session) => {
   const onDispose = cleanup => session.cleanups.push(cleanup);
   const abortController = new AbortController();
   onDispose(() => {
+    clearReviewInteractions();
     abortController.abort();
     window.clearTimeout(syncTimer);
     root?.unmount();
@@ -233,6 +235,7 @@ const start = async (session) => {
       }
 
       if (chapter.chapterUid !== activeChapterUid) {
+        clearReviewInteractions();
         clearPublicReviewState(chapter.chapterUid);
         wrapper.dataset.chapterUid = chapter.chapterUid;
         for (const key of ['layoutVersion', 'reviewPageCount', 'reviewCount', 'chapterTotalCount',
@@ -276,6 +279,8 @@ const start = async (session) => {
       }
 
       wrapper.dataset.reviewPageCount = String(response.pageCount || 0);
+      await activateReviewInteractions(book.value, chapter.chapterUid, filtered);
+      if (!live() || (await resolveCurrentChapter(catalog.chapters))?.chapterUid !== chapter.chapterUid) return;
       wrapper.dataset.reviewCount = String(filtered.length);
       wrapper.dataset.chapterTotalCount = String(response.chapterTotalCount ?? '');
       wrapper.dataset.paginationStoppedReason = response.paginationStoppedReason || '';

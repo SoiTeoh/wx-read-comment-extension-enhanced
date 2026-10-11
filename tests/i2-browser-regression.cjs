@@ -19,7 +19,8 @@ fixtureReader=makeReader(false);document.getElementById('app').__vue__=fixtureRe
 </script><div id="nativeToolbar" hidden>官方划线样式 <button onclick="this.parentNode.hidden=true">关闭原生划线</button></div>
 <div id="nativeWriter" hidden><textarea aria-label="原生想法编辑器"></textarea><button onclick="this.parentNode.hidden=true">关闭原生编辑器</button></div>
 <div id="nativeAI" hidden><textarea id="nativeAIInput" aria-label="原生 AI 输入"></textarea><button onclick="this.parentNode.hidden=true">关闭原生 AI</button></div>`;
-(async()=>{
+module.exports = { fixture };
+if (require.main === module) (async()=>{
   const output=path.resolve(__dirname,'../.test-artifacts/i2');fs.mkdirSync(output,{recursive:true});
   const context=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(),'wxrc-i2-')),{
     channel:'chromium',headless:process.env.WXRC_HEADLESS==='1',viewport:{width:1440,height:1000},

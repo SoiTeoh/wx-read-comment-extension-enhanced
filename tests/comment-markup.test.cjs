@@ -27,7 +27,8 @@ componentModule.filename = sourcePath;
 componentModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
 componentModule.require = (name) => name === './utils'
   ? { getReview: (entry) => entry.review || entry, getFormattedDate: () => '' }
-  : name === './readerCompatibility' ? compatibilityModule.exports : require(name);
+  : name === './readerCompatibility' ? compatibilityModule.exports
+  : name === './ReviewActions' ? { default: () => null, __esModule: true } : require(name);
 componentModule._compile(compiled, sourcePath);
 const Comment = componentModule.exports.default;
 const { matchesCommentFilter } = componentModule.exports;

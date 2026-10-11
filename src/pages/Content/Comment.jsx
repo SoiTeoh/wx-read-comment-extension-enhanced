@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getFormattedDate, getReview } from './utils';
 import { getCompatibilityMessage } from './readerCompatibility';
+import ReviewActions from './ReviewActions';
 
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
@@ -258,6 +259,7 @@ const Comment = (props) => {
                 dangerouslySetInnerHTML={{ __html: abstract }}
               />
             )}
+            <ReviewActions reviewId={reviewId} />
           </div>
         );
       })}
