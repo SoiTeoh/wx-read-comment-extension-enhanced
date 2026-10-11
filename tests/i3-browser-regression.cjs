@@ -22,7 +22,8 @@ window.makeReader=horizontal=>{const r=i3MakeReader(horizontal);if(horizontal)re
  return r};fixtureReader=makeReader(false);document.getElementById('app').__vue__=fixtureReader;
 </script>`;
 
-(async()=>{
+module.exports = { fixture };
+if (require.main === module) (async()=>{
  const output=path.resolve(__dirname,'../.test-artifacts/i3');fs.mkdirSync(output,{recursive:true});
  const context=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(),'wxrc-i3-')),{
   channel:'chromium',headless:process.env.WXRC_HEADLESS==='1',viewport:{width:1440,height:1000},

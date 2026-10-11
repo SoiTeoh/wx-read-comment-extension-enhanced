@@ -3,9 +3,12 @@ import { reviewState } from './nativeReviewOperations';
 
 const empty = Object.freeze({ isLike: null, likesCount: null, commentsCount: null, busy: false,
   ready: false, capabilities: {}, message: '', needsRefresh: false });
-const subscribers = new Set(), pending = new Map();
+const subscribers = new Map(), pending = new Map();
 let generation = 0, sequence = 0, session = null, states = new Map(), detailOpen = false, returnFocus = null;
-const notify = () => subscribers.forEach(listener => listener());
+const notify = reviewId => {
+  if (reviewId !== undefined) subscribers.get(reviewId)?.forEach(listener => listener());
+  else subscribers.forEach(listeners => listeners.forEach(listener => listener()));
+};
 const request = (type, payload) => new Promise((resolve, reject) => {
   const requestId = `interaction-${Date.now()}-${++sequence}`;
   const timer = setTimeout(() => { pending.delete(requestId); reject(Error('BRIDGE_TIMEOUT')); }, 30000);
@@ -35,20 +38,29 @@ window.addEventListener('message', event => {
     });
   }
 });
-export const subscribeReviewInteractions = listener => { subscribers.add(listener); return () => subscribers.delete(listener); };
+export const subscribeReviewInteractions = (reviewId, listener) => {
+  const id = String(reviewId);
+  if (!subscribers.has(id)) subscribers.set(id, new Set());
+  const listeners = subscribers.get(id); listeners.add(listener);
+  return () => { listeners.delete(listener); if (!listeners.size) subscribers.delete(id); };
+};
 export const getReviewInteractionState = reviewId => states.get(String(reviewId)) || empty;
 export const isReviewDetailOpen = () => detailOpen;
 export const clearReviewInteractions = () => {
   generation++; session = null; states = new Map(); detailOpen = false; returnFocus = null;
+  // Release obsolete content-side timers, not native writes already in flight.
+  for (const job of pending.values()) { clearTimeout(job.timer); job.reject(Error('CONTEXT_EXPIRED')); }
+  pending.clear();
   window.postMessage({ source: 'WXRC', type: 'CLEAR_REVIEW_INTERACTIONS', requestId: `clear-${++sequence}` }, '*');
   notify();
 };
 export const activateReviewInteractions = async (bookId, chapterUid, entries) => {
   clearReviewInteractions(); const epoch = generation;
-  const ids = [];
+  const ids = [], seen = new Set();
   for (const entry of entries) {
     const review = getReview(entry), id = String(review.reviewId || entry.reviewId || '');
-    if (!id || ids.includes(id)) continue;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
     ids.push(id); states.set(id, { ...empty, ...reviewState(entry) });
   }
   try {
@@ -63,21 +75,25 @@ export const activateReviewInteractions = async (bookId, chapterUid, entries) =>
   notify();
 };
 export const performReviewOperation = async (reviewId, operation, trigger) => {
+  reviewId = String(reviewId);
   const before = getReviewInteractionState(reviewId), epoch = generation, token = session?.token;
   if (!token || before.busy || !states.has(reviewId)) return;
-  states.set(reviewId, { ...before, busy: true, message: operation === 'like' ? '正在同步点赞…' : operation === 'reply' ? '正在打开评论…' : '正在刷新状态…' }); notify();
+  states.set(reviewId, { ...before, busy: true, message: operation === 'like' ? '正在同步点赞…' : operation === 'reply' ? '正在打开评论…' : '正在刷新状态…' }); notify(reviewId);
   try {
     const result = await request('EXECUTE_REVIEW_OPERATION', { token, reviewId, operation, expectedIsLike: before.isLike });
-    if (generation !== epoch || result.stale) return;
+    if (generation !== epoch) return;
+    if (result.stale) throw Error('CONTEXT_EXPIRED');
     if (result.opened) { detailOpen = true; returnFocus = trigger; }
-    states.set(reviewId, { ...before, ...result.state, busy: false, needsRefresh: false,
+    states.set(reviewId, { ...before, ...result.state, capabilities: result.capabilities || before.capabilities, busy: false, needsRefresh: false,
       message: result.changed ? '点赞状态已变化，已同步；再次点击可操作' : result.applied ? result.state.isLike ? '已点赞' : '已取消点赞' : '' });
   } catch (error) {
     if (generation !== epoch) return;
-    states.set(reviewId, { ...before, busy: false, needsRefresh: true,
+    const capabilities = error.message === 'LOGIN_REQUIRED' ? { like: false, reply: false, reason: 'LOGIN_REQUIRED' }
+      : error.message === 'NATIVE_ENTRY_UNAVAILABLE' ? { ...before.capabilities, [operation]: false, reason: error.message } : before.capabilities;
+    states.set(reviewId, { ...before, capabilities, busy: false, needsRefresh: true,
       message: messages[error.message] || (operation === 'like' ? '点赞结果未确认，请刷新状态；不会自动重试' : '操作未完成，请刷新状态后再试') });
   }
-  notify();
+  notify(reviewId);
 };
 
 export const getReviewActionLabels = state => ({
@@ -101,11 +117,11 @@ export const appendReviewActions = (parent, reviewId) => {
     reply.disabled = state.busy || !state.ready || !state.capabilities.reply;
     like.title = state.capabilities.like ? '' : messages[state.capabilities.reason] || '互动入口暂不可用';
     reply.title = state.capabilities.reply ? '打开这条想法的原生回复详情，由你提交' : like.title;
-    refresh.textContent = '刷新状态'; refresh.hidden = !state.needsRefresh; refresh.disabled = state.busy || !state.ready;
+    refresh.textContent = '刷新状态'; refresh.hidden = !state.needsRefresh && state.capabilities.like && state.capabilities.reply; refresh.disabled = state.busy || !state.ready;
     status.textContent = state.message || (state.ready && (!state.capabilities.like || !state.capabilities.reply) ? messages[state.capabilities.reason] || '部分互动入口暂不可用' : '');
   };
   like.addEventListener('click', event => { event.stopPropagation(); const state = getReviewInteractionState(reviewId); void performReviewOperation(reviewId, state.isLike === null ? 'refresh' : 'like', like); });
   reply.addEventListener('click', event => { event.stopPropagation(); void performReviewOperation(reviewId, 'reply', reply); });
   refresh.addEventListener('click', event => { event.stopPropagation(); void performReviewOperation(reviewId, 'refresh', refresh); });
-  const unsubscribe = subscribeReviewInteractions(render); render(); return unsubscribe;
+  const unsubscribe = subscribeReviewInteractions(reviewId, render); render(); return unsubscribe;
 };

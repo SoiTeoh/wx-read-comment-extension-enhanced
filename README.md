@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前已发布版本：**v1.4.0-beta.1**（M0–M4）。开发代码已补充 M5 自动化验收、[I0 原生功能基线](docs/i0-native-operation-baseline.md)、修正后的 [I1 纵向上下文与模式隔离](docs/i1-vertical-mode-isolation.md)及 [I2 纵向原文操作栏](docs/i2-vertical-text-operations.md)。插件仅在上下滚动模式挂载，进入左右双栏时退出，切回纵向恢复；此前的横向增强已移除。I3 与 M6 待开始，开发功能尚未发布到安装包。更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
+当前已发布版本：**v1.4.0-beta.1**（M0–M4）。开发代码已完成 M5 自动化验收与 I0–I4 互动扩展，见 [I1 纵向上下文与模式隔离](docs/i1-vertical-mode-isolation.md)、[I2 纵向原文操作栏](docs/i2-vertical-text-operations.md)、[I3 纵向想法互动](docs/i3-vertical-review-interactions.md)和 [I4 互动回归](docs/i4-interaction-regression.md)。插件仅在上下滚动模式挂载，进入左右双栏时退出，切回纵向恢复；此前的横向增强已移除。M6 待开始，开发功能尚未发布到安装包，回复最终提交待本地验收。更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
 
 ## 主要功能
 
@@ -90,7 +90,7 @@
 - 仅展示微信读书接口返回的公开评论／公开想法；不读取、模拟或推测私密评论。
 - 微信读书原生划线不一定对应公开评论，原生划线本身不保证可打开插件 popup。
 - 部分历史 `range` 可能因正文版本或 Reader layout 不匹配而无法映射；此类评论仍可在侧栏查看，但不能定位到正文。
-- 已发布安装版仍为只读评论增强；本地 I3 开发版已接入卡片点赞／取消点赞与原生回复入口。“写想法”和“评论”由用户在原生编辑器中确认提交；插件不自建发布编辑器，也不直接调用回复写接口。真实账号点赞与回复提交尚未验收。
+- 已发布安装版仍为只读评论增强；本地 I3 开发版已接入卡片点赞／取消点赞与原生回复入口。“写想法”和“评论”由用户在原生编辑器中确认提交；插件不自建发布编辑器，也不直接调用回复写接口。用户已确认浏览器中点赞可用、回复能打开官方评论页面；回复最终提交尚未验收。
 - 微信读书前端更新可能影响内部 Reader runtime 的兼容性。
 
 ## 开发状态
@@ -121,7 +121,7 @@ M4 在调用原生映射前检测 Reader 方法、正文画布与临时捕获能
 
 本地离线回归可运行 `npm test`；测试使用模拟的公开评论响应，不连接微信读书，也不读取登录凭据。涉及真实 Reader 布局、字号和鼠标命中的项目仍需在已登录的本地浏览器单独验收。
 
-完整受控回归运行 `npm run test:acceptance`，顺序执行离线测试、类型检查、构建与 M4／M5／I1／I2／I3 Chromium 夹具。Playwright 安装在独立工具目录，安装步骤、性能判定和真实登录态手工清单见 [M5 验收记录](docs/m5-automation-acceptance.md)。模式隔离见 [I1 记录](docs/i1-vertical-mode-isolation.md)，原文操作栏见 [I2 验收记录与截图](docs/i2-vertical-text-operations.md)，卡片互动见 [I3 验收记录与截图](docs/i3-vertical-review-interactions.md)。
+完整受控回归运行 `npm run test:acceptance`，顺序执行离线测试、类型检查、构建与 M4／M5／I1／I2／I3／I4 Chromium 夹具。Playwright 安装在独立工具目录，安装步骤、性能判定和真实登录态手工清单见 [M5 验收记录](docs/m5-automation-acceptance.md)。模式隔离见 [I1 记录](docs/i1-vertical-mode-isolation.md)，原文操作栏见 [I2 验收记录与截图](docs/i2-vertical-text-operations.md)，卡片互动见 [I3 记录](docs/i3-vertical-review-interactions.md)，最新互动性能与恢复行为见 [I4 记录](docs/i4-interaction-regression.md)。
 
   ## 新增开发目标：原生阅读操作与想法互动
 
@@ -156,8 +156,8 @@ M4 在调用原生映射前检测 Reader 方法、正文画布与临时捕获能
 | I0 · 原生功能基线 | 参考左右双栏官方行为，核实上下滚动 Reader 可复用的复制、划线、写想法、AI、点赞和回复入口 | 形成能力矩阵，记录参数与失败状态；区分“官方功能参考”和“纵向插件接入” | 基线资料已完成；纵向参数及调用结果继续核实，见 [I0 记录与预览](docs/i0-native-operation-baseline.md) |
 | I1 · 纵向上下文与模式隔离 | 仅在上下滚动模式启动增强；校验书籍、章节、原文对象及布局上下文；退出该模式时清理插件内容 | 左右双栏无插件 UI、评论加载或映射；切回纵向正确恢复；切章、字号、缩放后无旧选区和错位划线 | 修正完成：45 项离线测试、M4／M5／I1 Chromium 回归及纵向真实登录态验收通过，见 [I1 记录](docs/i1-vertical-mode-isolation.md) |
 | I2 · 纵向原文操作栏 | 在上下滚动页面的现有 popup 中接入复制、划线、写想法与 AI 问书，优先复用已验证的原生行为 | 侧栏关闭时操作栏独立可用；原文和个人划线对象正确；编辑器与 AI 保留上下文；键盘、窄窗口、日夜主题及单项降级通过 | 已完成：51 项离线测试、37 项 Chromium 场景及真实登录态纵向入口验收通过；划线样式和发布由原生界面继续，见 [I2 记录](docs/i2-vertical-text-operations.md) |
-| I3 · 纵向想法点赞与评论 | 在上下滚动页面的插件想法卡片增加点赞／取消点赞、回复详情及回复入口 | 操作作用于正确想法；处理登录失效、失败、重复点击和迟到响应；用户显式提交后才产生回复 | 开发与受控验收完成：59 项离线测试、48 项 Chromium 场景通过；真实纵向详情／回复入口通过。按用户选择未执行真实点赞及回复提交，见 [I3 记录](docs/i3-vertical-review-interactions.md) |
-| I4 · 互动回归与交互改进 | 补充 UI、生命周期、失败降级与性能自动化；按基线结果改善操作反馈和详情体验 | 既有验收通过，新增受控测试通过；真实登录态本地手工验收通过并记录；不将模拟成功当成真实互动成功，再进入 M6 | 待开始，依赖 I3 |
+| I3 · 纵向想法点赞与评论 | 在上下滚动页面的插件想法卡片增加点赞／取消点赞、回复详情及回复入口 | 操作作用于正确想法；处理登录失效、失败、重复点击和迟到响应；用户显式提交后才产生回复 | 已完成开发与受控验收；用户于 2026-10-11 确认点赞可用、回复能打开官方评论页面。代理未执行真实写入，回复最终提交待验收，见 [I3 记录](docs/i3-vertical-review-interactions.md) |
+| I4 · 互动回归与交互改进 | 补充 UI、生命周期、失败降级与性能自动化；按基线结果改善操作反馈和详情体验 | 既有验收通过，新增受控测试通过；真实登录态本地手工验收通过并记录；不将模拟成功当成真实互动成功，再进入 M6 | 开发与自动化完成：66 项离线测试、56 项 Chromium 场景通过；真实纵向入口、焦点、窄窗口及重复开关回归通过。回复最终提交／真实分页仍待发布前本地验收，见 [I4 记录](docs/i4-interaction-regression.md) |
 
 ### 实现约束与测试计划
 

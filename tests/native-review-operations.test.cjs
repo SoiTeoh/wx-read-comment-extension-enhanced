@@ -78,3 +78,26 @@ test('I3 ambiguous actions and unrelated panels degrade individually without cal
   h.panel.$options.name='UnrelatedPanel';assert.equal(inspectReviewRuntime(h.reader).panel,null);
   assert.equal(h.state.writes.length,0);
 });
+test('I4 concurrent reply openings for different thoughts cannot race or overwrite a draft',async()=>{
+  const h=setup(),{token}=h.register();let release;
+  const read=h.env.readReview;h.env.readReview=id=>new Promise(resolve=>release=()=>read(id).then(resolve));
+  const first=h.execute(token,'reply');await assert.rejects(h.execute(token,'reply','second'),/OPERATION_BUSY/);release();await first;
+  h.panel.hide();h.operations.poll();h.panel.commentText='Unsubmitted draft';h.env.readReview=read;
+  await assert.rejects(h.execute(token,'reply','second'),/OPERATION_BUSY/);assert.equal(h.panel.commentText,'Unsubmitted draft');assert.equal(h.state.writes.length,0);
+});
+test('I4 a failed or stale parent opening is cleaned without showing a late detail',async()=>{
+  for(const stale of [false,true]){
+    const h=setup(),{token}=h.register();let open=false,release;
+    const note={$options:{name:'ReaderNotePanel'},$el:{isConnected:true},$refs:{reviewDetail:h.panel},isShowing:()=>open,close:()=>{open=false},show:()=>{open=true;return new Promise(resolve=>release=resolve)}};
+    h.reader.$refs={readerNotePanel:note};const task=h.execute(token,'reply');await new Promise(resolve=>setImmediate(resolve));
+    if(stale){h.operations.clear();release()}else{h.panel.show=()=>{throw Error('native changed')};release()}
+    await assert.rejects(task);assert.equal(open,false);assert.equal(h.panel.showing,false);assert.equal(h.state.writes.length,0);
+  }
+});
+test('I4 native writes retain their lock across re-registration and refresh redetects capabilities',async()=>{
+  const h=setup(),{token}=h.register();let release;const dispatch=h.reader.$store.dispatch;
+  h.reader.$store.dispatch=(...args)=>new Promise(resolve=>release=()=>dispatch(...args).then(resolve));
+  const task=h.execute(token,'like');await new Promise(resolve=>setImmediate(resolve));const next=h.register();
+  await assert.rejects(h.execute(next.token,'like'),/OPERATION_BUSY/);release();assert.equal((await task).stale,true);
+  h.reader.$store._actions={};const refreshed=await h.execute(next.token,'refresh');assert.equal(refreshed.capabilities.like,false);assert.equal(refreshed.capabilities.reply,true);
+});

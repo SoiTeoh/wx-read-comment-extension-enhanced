@@ -37,7 +37,7 @@ export const inspectReviewRuntime = reader => {
 
 // Only IDs registered from the loaded public chapter list can become interaction targets.
 export const createReviewOperations = environment => {
-  let current = null, sequence = 0, detail = null;
+  let current = null, sequence = 0, detail = null, openingReply = false;
   const inFlight = new Set();
   const valid = context => context && context === current && environment.getMode() === 'vertical' &&
     environment.getReader() === context.reader && !context.reader._isDestroyed && context.reader.$el?.isConnected !== false &&
@@ -56,14 +56,15 @@ export const createReviewOperations = environment => {
       review.isPrivate === true || review.isPrivate === 1) throw Error('REVIEW_TARGET_INVALID');
     return entry;
   };
-  const closeDetail = () => {
-    if (!detail) return;
-    const old = detail; detail = null;
+  const disposeDetail = old => {
     if (String(old.panel.review?.reviewId) === old.reviewId) {
       try { if (old.panel.showing) old.panel.hide(); } catch (_error) { /* Do not break reading on native teardown failure. */ }
+    }
+    if (String(old.panel.review?.reviewId) === old.reviewId || !old.panel.showing) {
       try { if (old.ownsContainer && old.container?.isShowing()) old.container.close(); } catch (_error) { /* Native containers may have been destroyed. */ }
     }
   };
+  const closeDetail = () => { if (detail) { const old = detail; detail = null; disposeDetail(old); } };
   const capabilities = reader => {
     const runtime = inspectReviewRuntime(reader), loggedIn = reader?.hasLogin === true;
     return { like: loggedIn && Boolean(runtime.likeAction), reply: loggedIn && Boolean(runtime.panel),
@@ -83,27 +84,35 @@ export const createReviewOperations = environment => {
     async execute({ token, reviewId, operation, expectedIsLike }) {
       const context = check(token, reviewId);
       if (!['refresh', 'like', 'reply'].includes(operation)) throw Error('UNKNOWN_OPERATION');
+      if (operation === 'reply' && openingReply) throw Error('OPERATION_BUSY');
       const key = `${context.bookId}:${reviewId}`;
       if (inFlight.has(key)) throw Error('OPERATION_BUSY');
       inFlight.add(key);
+      if (operation === 'reply') openingReply = true;
       try {
         const entry = await load(context, reviewId);
         if (!valid(context)) throw Error('CONTEXT_EXPIRED');
         if (context.reader.hasLogin !== true) throw Error('LOGIN_REQUIRED');
         const state = reviewState(entry);
-        if (operation === 'refresh') return { state };
+        if (operation === 'refresh') return { state, capabilities: capabilities(context.reader) };
         const runtime = inspectReviewRuntime(context.reader);
         if (operation === 'reply') {
           if (!runtime.panel || detail?.panel.showing) throw Error(detail ? 'OPERATION_BUSY' : 'NATIVE_ENTRY_UNAVAILABLE');
           if (runtime.panel.isCommenting || runtime.panel.commentText?.trim()) throw Error('OPERATION_BUSY');
           const ownsContainer = Boolean(runtime.container && !runtime.container.isShowing());
-          detail = { panel: runtime.panel, container: runtime.container, ownsContainer, context, reviewId };
-          if (ownsContainer) await runtime.container.show();
-          if (runtime.container?.$nextTick) await runtime.container.$nextTick();
-          await runtime.panel.show({ review: entry, showComment: true });
-          if (runtime.panel.$nextTick) await runtime.panel.$nextTick();
-          if (!valid(context)) { closeDetail(); throw Error('CONTEXT_EXPIRED'); }
-          if (environment.isPanelVisible && !environment.isPanelVisible(runtime.panel)) { closeDetail(); throw Error('NATIVE_ENTRY_UNAVAILABLE'); }
+          const opened = { panel: runtime.panel, container: runtime.container, ownsContainer, context, reviewId };
+          detail = opened;
+          const checkContext = () => { if (!valid(context)) throw Error('CONTEXT_EXPIRED'); };
+          try {
+            if (ownsContainer) await runtime.container.show();
+            checkContext();
+            if (runtime.container?.$nextTick) await runtime.container.$nextTick();
+            checkContext();
+            await runtime.panel.show({ review: entry, showComment: true });
+            if (runtime.panel.$nextTick) await runtime.panel.$nextTick();
+            checkContext();
+            if (environment.isPanelVisible && !environment.isPanelVisible(runtime.panel)) throw Error('NATIVE_ENTRY_UNAVAILABLE');
+          } catch (error) { if (detail === opened) detail = null; disposeDetail(opened); throw error; }
           return { opened: true, state };
         }
         if (!runtime.likeAction) throw Error('NATIVE_ENTRY_UNAVAILABLE');
@@ -119,7 +128,7 @@ export const createReviewOperations = environment => {
         catch (_error) { throw Error('LIKE_APPLIED_STATE_UNKNOWN'); }
         if (updated.isLike !== !state.isLike) throw Error('LIKE_APPLIED_STATE_UNKNOWN');
         return { state: updated, applied: true, stale: !valid(context) };
-      } finally { inFlight.delete(key); }
+      } finally { inFlight.delete(key); if (operation === 'reply') openingReply = false; }
     },
     poll() {
       if (!detail) return;
