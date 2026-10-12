@@ -7,6 +7,9 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
 const compatibilityPath = path.resolve(__dirname, '../src/pages/Content/readerCompatibility.js');
+const browsingPath = path.resolve(__dirname, '../src/pages/Content/commentBrowsing.js');
+const browsingModule = new Module(browsingPath, module);
+browsingModule._compile(babel.transformFileSync(browsingPath, { configFile:false, babelrc:false, presets:[['@babel/preset-env',{targets:{node:'current'}}]] }).code,browsingPath);
 const compatibilityModule = new Module(compatibilityPath, module);
 compatibilityModule._compile(babel.transformFileSync(compatibilityPath, {
   configFile: false, babelrc: false,
@@ -27,6 +30,7 @@ componentModule.filename = sourcePath;
 componentModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
 componentModule.require = (name) => name === './utils'
   ? { getReview: (entry) => entry.review || entry, getFormattedDate: () => '' }
+  : name === './commentBrowsing' ? browsingModule.exports
   : name === './readerCompatibility' ? compatibilityModule.exports
   : name === './ReviewActions' ? { default: () => null, __esModule: true } : require(name);
 componentModule._compile(compiled, sourcePath);

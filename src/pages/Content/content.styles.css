@@ -824,3 +824,22 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     overflow-wrap: anywhere;
 }
 .wxrc_compatibility_notice p { margin: 0 0 8px; }
+.wxrc_comment_content_collapsed {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    overflow: hidden;
+}
+.wxrc_comment_expand, .wxrc_popup_load_more {
+    border: 0;
+    border-radius: 12px;
+    padding: 6px 10px;
+    margin-top: 6px;
+    background: var(--wxrc-surface-container, transparent);
+    color: var(--wxrc-primary, inherit);
+    font: inherit;
+    cursor: pointer;
+}
+.wxrc_comment_expand:focus-visible, .wxrc_popup_load_more:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.wxrc_popup_load_more { width: 100%; }
+.wxrc_popup_progress { display: block; font-size: 12px; margin-top: 6px; }

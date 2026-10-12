@@ -4,6 +4,7 @@ import { badgeWidthForCount, positionBadge, positionPopup } from './popupBadgeLa
 import { compatibilityFailure } from './readerCompatibility';
 import { createNativeTextToolbar } from './nativeTextToolbar';
 import { appendReviewActions, isReviewDetailOpen } from './reviewInteractions';
+import { createPopupBrowsingMemory, isLongComment, POPUP_PAGE_SIZE } from './commentBrowsing';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -40,6 +41,8 @@ let sidebarVisible = true;
 let publicReviewIndex = createEmptyIndex();
 let popupReturnFocus = null;
 let popupCleanups = [];
+const popupBrowsingMemory = createPopupBrowsingMemory();
+let savePopupBrowsing = null;
 let readerCompatibility = null;
 let enhancementEnabled = true;
 
@@ -73,6 +76,7 @@ const createRequestId = () =>
     .slice(2, 8)}`;
 
 const removePopup = (restoreFocus = false) => {
+  savePopupBrowsing?.(); savePopupBrowsing = null;
   for (const cleanup of popupCleanups.splice(0)) cleanup();
   document.querySelectorAll(`.${POPUP_CLASS}`).forEach((node) => node.remove());
   const returnFocus = popupReturnFocus;
@@ -134,6 +138,7 @@ export const clearPublicReviewState = (chapterUid = '') => {
   renderGeneration += 1;
   activeChapterUid = String(chapterUid || '');
   clearPublicUnderlines();
+  popupBrowsingMemory.clear();
   clearPublicReviewIndex(activeChapterUid);
 };
 
@@ -273,7 +278,14 @@ const showPopup = (event, reviews, group) => {
     popup.append(operations.toolbar, operations.quote, operations.status);
   }
 
-  for (const review of reviews) {
+  const memoryKey = group?.key;
+  const browsing = popupBrowsingMemory.read(memoryKey);
+  const items = document.createElement('div'); items.className = 'wxrc_public_review_popup_list';
+  const more = document.createElement('button'); more.type = 'button'; more.className = 'wxrc_popup_load_more';
+  const progress = document.createElement('span'); progress.className = 'wxrc_popup_progress'; progress.setAttribute('role', 'status');
+  popup.append(items, more, progress);
+  let rendered = 0;
+  const appendItem = (review, index) => {
     const item = document.createElement('div');
     item.className = 'wxrc_public_review_popup_item';
     const header = document.createElement('div');
@@ -289,10 +301,33 @@ const showPopup = (event, reviews, group) => {
     header.appendChild(name);
     item.appendChild(header);
     appendTextBlock(item, 'wxrc_public_review_popup_abstract', review.abstract);
-    appendTextBlock(item, 'wxrc_public_review_popup_content', review.content);
+    const content = document.createElement('div'); content.className = 'wxrc_public_review_popup_content'; content.textContent = String(review.content || ''); item.appendChild(content);
+    if (isLongComment(review.content)) {
+      const id = String(review.reviewId || index);
+      const expand = document.createElement('button'); expand.type = 'button'; expand.className = 'wxrc_comment_expand';
+      const update = () => { const opened = browsing.expanded.has(id); content.classList.toggle('wxrc_comment_content_collapsed', !opened); expand.textContent = opened ? '收起全文' : '展开全文'; expand.setAttribute('aria-expanded', String(opened)); };
+      expand.addEventListener('click', event => { event.stopPropagation(); if (browsing.expanded.has(id)) browsing.expanded.delete(id); else browsing.expanded.add(id); update(); });
+      update(); item.appendChild(expand);
+    }
     popupCleanups.push(appendReviewActions(item, String(review.reviewId || '')));
-    popup.appendChild(item);
-  }
+    items.appendChild(item);
+  };
+  const appendPage = target => {
+    const end = Math.min(reviews.length, target);
+    while (rendered < end) { appendItem(reviews[rendered], rendered); rendered++; }
+    browsing.loaded = rendered;
+    more.hidden = rendered === reviews.length;
+    more.textContent = `加载更多想法（剩余 ${reviews.length - rendered} 条）`;
+    progress.textContent = reviews.length > POPUP_PAGE_SIZE ? `已显示 ${rendered} / ${reviews.length} 条` : '';
+  };
+  appendPage(browsing.loaded);
+  more.addEventListener('click', () => {
+    const top = popup.scrollTop;
+    const firstNewIndex = rendered;
+    appendPage(rendered + POPUP_PAGE_SIZE);
+    popup.scrollTop = top;
+    if (more.hidden) { const firstNew = items.children[firstNewIndex]; firstNew?.querySelector('button')?.focus({ preventScroll: true }); }
+  });
 
   document.body.appendChild(popup);
   const popupRect = popup.getBoundingClientRect();
@@ -303,6 +338,8 @@ const showPopup = (event, reviews, group) => {
   );
   popup.style.left = `${position.left}px`;
   popup.style.top = `${position.top}px`;
+  popup.scrollTop = browsing.scrollTop;
+  savePopupBrowsing = () => { if (memoryKey) popupBrowsingMemory.save(memoryKey, { ...browsing, scrollTop: popup.scrollTop }); };
   close.focus({ preventScroll: true });
 };
 

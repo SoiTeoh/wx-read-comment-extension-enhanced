@@ -13,7 +13,8 @@ delete config.chromeExtensionBoilerplate;
 
 config.mode = 'production';
 
-config.plugins = (config.plugins || []).concat(
+// Acceptance builds validate runtime assets without overwriting a release ZIP.
+if (!process.argv.includes('--no-zip')) config.plugins = (config.plugins || []).concat(
     new ZipPlugin({
         filename: `wx-read-comment-extension-enhanced-v${require('../package.json').version}.zip`,
         path: path.join(__dirname, '../'),
@@ -30,6 +31,6 @@ webpack(config, function (err, stats) {
         console.error(stats.toString({ all: false, errors: true }));
         process.exitCode = 1;
     } else {
-        console.log('Build and release ZIP completed successfully.');
+        console.log(process.argv.includes('--no-zip') ? 'Build completed successfully (no release ZIP written).' : 'Build and release ZIP completed successfully.');
     }
 });

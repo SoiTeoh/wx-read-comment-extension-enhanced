@@ -9,7 +9,7 @@ const gates = [
   ...browserOnly ? [] : [
     ['offline tests', ['--test', ...unitTests]],
     ['TypeScript', ['node_modules/typescript/bin/tsc', '--noEmit']],
-    ['production build', ['utils/build.js']],
+    ['production build', ['utils/build.js', '--no-zip']],
   ],
   ['M4 browser compatibility', ['tests/m4-browser-smoke.cjs']],
   ['M5 UI, lifecycle and performance', ['tests/m5-browser-regression.cjs']],
@@ -17,6 +17,7 @@ const gates = [
   ['I2 vertical original text operations', ['tests/i2-browser-regression.cjs']],
   ['I3 vertical thought interactions', ['tests/i3-browser-regression.cjs']],
   ['I4 interaction lifecycle and performance', ['tests/i4-browser-regression.cjs']],
+  ['U1 large-group and long-comment browsing', ['tests/u1-browser-regression.cjs']],
 ];
 for (const [name, args] of gates) {
   console.log(`\nAcceptance gate: ${name}`);

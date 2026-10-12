@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getFormattedDate, getReview } from './utils';
 import { getCompatibilityMessage } from './readerCompatibility';
 import ReviewActions from './ReviewActions';
+import { isLongComment } from './commentBrowsing';
 
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
@@ -37,12 +38,14 @@ const Comment = (props) => {
     onReload, reviewSync, settings, onSettingChange,
   } = props;
   const [expandedReviewIds, setExpandedReviewIds] = useState(() => new Set());
+  const [expandedContentIds, setExpandedContentIds] = useState(() => new Set());
   const [query, setQuery] = useState('');
   const [mappingFilter, setMappingFilter] = useState('all');
   const commentData = list;
 
   useEffect(() => {
     setExpandedReviewIds(new Set());
+    setExpandedContentIds(new Set());
   }, [list]);
 
   useEffect(() => {
@@ -238,9 +241,13 @@ const Comment = (props) => {
               )}
             </div>
             <div
-              className="comment-item-content"
+              className={`comment-item-content ${isLongComment(item.content) && !expandedContentIds.has(reviewId) ? 'wxrc_comment_content_collapsed' : ''}`}
               dangerouslySetInnerHTML={{ __html: item.content || '' }}
             />
+            {isLongComment(item.content) && <button type="button" className="wxrc_comment_expand" aria-expanded={expandedContentIds.has(reviewId)}
+              onClick={event => { event.stopPropagation(); setExpandedContentIds(previous => { const next = new Set(previous); if (next.has(reviewId)) next.delete(reviewId); else next.add(reviewId); return next; }); }}>
+              {expandedContentIds.has(reviewId) ? '收起全文' : '展开全文'}
+            </button>}
             {item.abstract && (
               <div
                 className={expandedReviewIds.has(reviewId) ? expandedClass : collapsedClass}
