@@ -24,6 +24,8 @@ import {
   setPublicUnderlinesVisible,
   setSidebarVisible,
   setPublicReviewEnabled,
+  setKeyboardShortcuts,
+  prepareReadingPosition,
 } from './publicReviewUnderlines';
 
 const SETTINGS_KEY = 'wxrc_phase6_settings';
@@ -33,6 +35,7 @@ const DEFAULT_SETTINGS = {
   showSidebar: true,
   sortOrder: 'reading',
   commentDensity: 'comfortable',
+  keyboardShortcuts: false,
 };
 
 const loadSettings = async () => {
@@ -44,6 +47,7 @@ const loadSettings = async () => {
       showSidebar: stored?.showSidebar !== false,
       sortOrder: stored?.sortOrder === 'api' ? 'api' : 'reading',
       commentDensity: stored?.commentDensity === 'compact' ? 'compact' : 'comfortable',
+      keyboardShortcuts: stored?.keyboardShortcuts === true,
     };
   } catch (error) {
     console.warn('[WxReadComments][Phase6] settings load failed', String(error));
@@ -86,6 +90,7 @@ const start = async (session) => {
   if (!live()) return;
   setPublicReviewEnabled(true);
   setFollowReadingPosition(settings.followReadingPosition);
+  setKeyboardShortcuts(settings.keyboardShortcuts);
   setPublicUnderlinesVisible(settings.showPublicUnderlines);
   wrapper = document.createElement('div');
   wrapper.className = 'chrex-comment-wrapper';
@@ -114,12 +119,14 @@ const start = async (session) => {
   const onSettingChange = (key, value) => {
     if (!live()) return;
     if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return;
+    if (key === 'showSidebar') prepareReadingPosition();
     settings = {
       ...settings,
       [key]: key === 'sortOrder' ? (value === 'api' ? 'api' : 'reading')
         : key === 'commentDensity' ? (value === 'compact' ? 'compact' : 'comfortable') : Boolean(value),
     };
     setFollowReadingPosition(settings.followReadingPosition);
+    setKeyboardShortcuts(settings.keyboardShortcuts);
     setPublicUnderlinesVisible(settings.showPublicUnderlines);
     if (key === 'showSidebar') {
       applySidebarVisibility();

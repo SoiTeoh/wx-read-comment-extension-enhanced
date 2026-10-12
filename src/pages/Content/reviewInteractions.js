@@ -1,10 +1,12 @@
 import { getReview } from './utils';
 import { reviewState } from './nativeReviewOperations';
+import { capturePanelPosition, restorePanelPosition } from './readingNavigation';
 
 const empty = Object.freeze({ isLike: null, likesCount: null, commentsCount: null, busy: false,
   ready: false, capabilities: {}, message: '', needsRefresh: false });
 const subscribers = new Map(), pending = new Map();
 let generation = 0, sequence = 0, session = null, states = new Map(), detailOpen = false, returnFocus = null;
+let replyPosition = null;
 const notify = reviewId => {
   if (reviewId !== undefined) subscribers.get(reviewId)?.forEach(listener => listener());
   else subscribers.forEach(listeners => listeners.forEach(listener => listener()));
@@ -32,9 +34,10 @@ window.addEventListener('message', event => {
   }
   if (message.type === 'REVIEW_DETAIL_CLOSED' && message.token === session?.token) {
     detailOpen = false; const target = returnFocus; returnFocus = null;
+    const position = replyPosition; replyPosition = null;
     const epoch = generation;
     void performReviewOperation(message.reviewId, 'refresh').then(() => {
-      if (epoch === generation && !detailOpen && message.restoreFocus !== false && target?.isConnected) target.focus({ preventScroll: true });
+      if (epoch === generation && !detailOpen && message.restoreFocus !== false) { restorePanelPosition(position); if (target?.isConnected) target.focus({ preventScroll: true }); }
     });
   }
 });
@@ -48,6 +51,7 @@ export const getReviewInteractionState = reviewId => states.get(String(reviewId)
 export const isReviewDetailOpen = () => detailOpen;
 export const clearReviewInteractions = () => {
   generation++; session = null; states = new Map(); detailOpen = false; returnFocus = null;
+  replyPosition = null;
   // Release obsolete content-side timers, not native writes already in flight.
   for (const job of pending.values()) { clearTimeout(job.timer); job.reject(Error('CONTEXT_EXPIRED')); }
   pending.clear();
@@ -77,13 +81,14 @@ export const activateReviewInteractions = async (bookId, chapterUid, entries) =>
 export const performReviewOperation = async (reviewId, operation, trigger) => {
   reviewId = String(reviewId);
   const before = getReviewInteractionState(reviewId), epoch = generation, token = session?.token;
+  const position = operation === 'reply' ? capturePanelPosition() : null;
   if (!token || before.busy || !states.has(reviewId)) return;
   states.set(reviewId, { ...before, busy: true, message: operation === 'like' ? '正在同步点赞…' : operation === 'reply' ? '正在打开评论…' : '正在刷新状态…' }); notify(reviewId);
   try {
     const result = await request('EXECUTE_REVIEW_OPERATION', { token, reviewId, operation, expectedIsLike: before.isLike });
     if (generation !== epoch) return;
     if (result.stale) throw Error('CONTEXT_EXPIRED');
-    if (result.opened) { detailOpen = true; returnFocus = trigger; }
+    if (result.opened) { detailOpen = true; returnFocus = trigger; replyPosition = position; }
     states.set(reviewId, { ...before, ...result.state, capabilities: result.capabilities || before.capabilities, busy: false, needsRefresh: false,
       message: result.changed ? '点赞状态已变化，已同步；再次点击可操作' : result.applied ? result.state.isLike ? '已点赞' : '已取消点赞' : '' });
   } catch (error) {

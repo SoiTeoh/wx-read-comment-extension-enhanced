@@ -10,7 +10,7 @@ const setup = () => {
   const window={addEventListener:(type,fn)=>listeners.push(fn),postMessage:message=>sent.push(message)};
   const exports={};
   vm.runInNewContext(code,{exports,window,setTimeout:fn=>{timers.set(++sequence,fn);return sequence},clearTimeout:id=>timers.delete(id),
-    require:name=>name==='./utils'?{getReview:e=>e.review||e}:{reviewState:e=>({isLike:!!e.review.isLike,likesCount:e.likesCount??null,commentsCount:e.commentsCount??null})}}, {filename});
+    require:name=>name==='./utils'?{getReview:e=>e.review||e}:name==='./readingNavigation'?{capturePanelPosition:()=>null,restorePanelPosition:()=>{}}:{reviewState:e=>({isLike:!!e.review.isLike,likesCount:e.likesCount??null,commentsCount:e.commentsCount??null})}}, {filename});
   const reply=(message,result,error)=>listeners.forEach(fn=>fn({source:window,data:{source:'WXRC_PAGE',type:'REVIEW_OPERATION_RESULT',requestId:message.requestId,result,error}}));
   const last=()=>sent.filter(e=>e.type==='EXECUTE_REVIEW_OPERATION').at(-1);
   const activate=async(count=2,caps={like:true,reply:true})=>{

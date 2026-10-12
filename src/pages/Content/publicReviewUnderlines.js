@@ -5,6 +5,7 @@ import { compatibilityFailure } from './readerCompatibility';
 import { createNativeTextToolbar } from './nativeTextToolbar';
 import { appendReviewActions, isReviewDetailOpen } from './reviewInteractions';
 import { createPopupBrowsingMemory, isLongComment, POPUP_PAGE_SIZE } from './commentBrowsing';
+import { chooseReadingAnchor, anchorScrollTop, getNavigationVersion, installNavigationTracking, shortcutOperation } from './readingNavigation';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -43,6 +44,17 @@ let popupReturnFocus = null;
 let popupCleanups = [];
 const popupBrowsingMemory = createPopupBrowsingMemory();
 let savePopupBrowsing = null;
+let keyboardShortcuts = false, pendingReadingAnchor = null, readingRestoreTimer = 0;
+export const setKeyboardShortcuts = enabled => { keyboardShortcuts = Boolean(enabled); };
+const readingGeometry = () => new Map(Array.from(publicReviewIndex.ranges, ([key, group]) => [key, {
+  rects: group.wrappers.map(node => { const rect = node.getBoundingClientRect(); return { y: rect.top, h: rect.height }; }),
+}]));
+const rememberReadingAnchor = (force = false) => {
+  if (!force && pendingReadingAnchor && pendingReadingAnchor.navigation === getNavigationVersion() && Date.now() - pendingReadingAnchor.time < 2500) return;
+  const anchor = chooseReadingAnchor(readingGeometry(), 0, window.innerHeight);
+  pendingReadingAnchor = anchor ? { ...anchor, chapter: activeChapterUid, navigation: getNavigationVersion(), time: Date.now(), sidebar: document.querySelector('.comment-react-wrapper'), sidebarTop: document.querySelector('.comment-react-wrapper')?.scrollTop } : null;
+};
+export const prepareReadingPosition = () => rememberReadingAnchor(true);
 let readerCompatibility = null;
 let enhancementEnabled = true;
 
@@ -139,6 +151,8 @@ export const clearPublicReviewState = (chapterUid = '') => {
   activeChapterUid = String(chapterUid || '');
   clearPublicUnderlines();
   popupBrowsingMemory.clear();
+  pendingReadingAnchor = null;
+  window.clearTimeout(readingRestoreTimer);
   clearPublicReviewIndex(activeChapterUid);
 };
 
@@ -149,6 +163,7 @@ const onPageMessage = (event) => {
 
   if (message.type === 'LAYOUT_INVALIDATED') {
     if (!enhancementEnabled) return;
+    rememberReadingAnchor();
     renderGeneration += 1;
     clearPublicUnderlines();
     clearPublicReviewIndex(activeChapterUid);
@@ -740,9 +755,13 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
   invalidationCallback = onInvalidated;
   if (initialized) return;
   initialized = true;
+  installNavigationTracking();
   window.addEventListener('message', onPageMessage);
   window.addEventListener('resize', () => invalidatePublicReviewLayout('resize'));
   document.addEventListener('pointerdown', onDocumentPointerDown, true);
+  document.addEventListener('pointerdown', event => {
+    if (enhancementEnabled && event.target?.closest?.('.reader_font_control_slider_wrapper')) rememberReadingAnchor(true);
+  }, true);
   document.addEventListener('pointermove', onDocumentPointerMoveCapture, true);
   document.addEventListener('click', onDocumentClickCapture, true);
   document.addEventListener('pointermove', onDocumentPointerMove, { passive: true });
@@ -757,6 +776,20 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
     }
   });
   document.addEventListener('keydown', (event) => {
+    const operation = shortcutOperation(event);
+    const nativeMaskVisible = operation && Array.from(document.querySelectorAll('.wr_mask_Show')).some(node => { const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < window.innerWidth && rect.bottom > 0 && rect.top < window.innerHeight; });
+    if (keyboardShortcuts && enhancementEnabled && operation && !isReviewDetailOpen() && !nativeMaskVisible &&
+      !event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .readerNotePanel, .wr_float_panel_container, .reader-font-control-panel-wrapper') && !hasActiveTextSelection()) {
+      if (operation === 'copy') {
+        const copy = document.querySelector(`.${POPUP_CLASS} [data-operation="copy"]`);
+        if (copy && !copy.disabled) { event.preventDefault(); copy.click(); }
+      } else {
+        const nearest = chooseReadingAnchor(readingGeometry(), 0, window.innerHeight);
+        const group = nearest && publicReviewIndex.ranges.get(nearest.key);
+        const trigger = group?.wrappers?.[nearest.index] || group?.wrappers?.[0];
+        if (trigger && showPublicUnderlines) { event.preventDefault(); trigger.focus({ preventScroll: true }); const box = trigger.getBoundingClientRect(); showPopup({ currentTarget: trigger, clientX: box.left, clientY: box.bottom }, group.reviews, group); }
+      }
+    }
     if (event.key === 'Escape' && !isReviewDetailOpen() && document.querySelector(`.${POPUP_CLASS}`)) {
       event.preventDefault();
       event.stopPropagation();
@@ -781,6 +814,7 @@ export const probePublicReviewCompatibility = async () => {
 
 export const invalidatePublicReviewLayout = (reason) => {
   if (!enhancementEnabled) return;
+  rememberReadingAnchor();
   renderGeneration += 1;
   clearPublicUnderlines();
   clearPublicReviewIndex(activeChapterUid);
@@ -950,6 +984,16 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
       width: containerRect.width,
       height: containerRect.height,
     });
+    const anchor = pendingReadingAnchor;
+    window.clearTimeout(readingRestoreTimer);
+    if (anchor) readingRestoreTimer = window.setTimeout(() => {
+      if (pendingReadingAnchor !== anchor || generation !== renderGeneration) return;
+      pendingReadingAnchor = null;
+      if (anchor.chapter !== activeChapterUid || anchor.navigation !== getNavigationVersion() || Date.now() - anchor.time >= 2500) return;
+      const top = anchorScrollTop(anchor, readingGeometry(), window.scrollY);
+      if (top !== null && Math.abs(top - window.scrollY) > 1) window.scrollTo({ top, behavior: 'instant' });
+      if (anchor.sidebar?.isConnected) anchor.sidebar.scrollTop = anchor.sidebarTop;
+    }, 350);
     scheduleScrollSync();
     window.setTimeout(scheduleScrollSync, 0);
 

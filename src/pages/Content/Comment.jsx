@@ -160,6 +160,8 @@ const Comment = (props) => {
           </label>
         </div>
         <p className="wxrc_settings_description">
+          <label><input type="checkbox" checked={settings?.keyboardShortcuts === true} onChange={event => onSettingChange?.('keyboardShortcuts', event.target.checked)} />启用阅读快捷键</label>
+          {settings?.keyboardShortcuts && <span> Alt+Shift+C 打开附近想法；Alt+Shift+Y 复制弹窗引用；Esc 关闭弹窗。</span>}
           仅展示接口返回的公开评论和公开想法。带有特殊样式的划线可点击查看公开想法。
           微信读书原生划线会保持不变，但原生划线不一定有公开评论，因此部分划线无法点击。
         </p>

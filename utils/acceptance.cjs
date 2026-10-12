@@ -18,6 +18,7 @@ const gates = [
   ['I3 vertical thought interactions', ['tests/i3-browser-regression.cjs']],
   ['I4 interaction lifecycle and performance', ['tests/i4-browser-regression.cjs']],
   ['U1 large-group and long-comment browsing', ['tests/u1-browser-regression.cjs']],
+  ['U2 reading position and keyboard navigation', ['tests/u2-browser-regression.cjs']],
 ];
 for (const [name, args] of gates) {
   console.log(`\nAcceptance gate: ${name}`);

@@ -16,6 +16,7 @@ const load = (name) => {
 const compatibility = load('readerCompatibility.js');
 const layout = load('popupBadgeLayout.js');
 const browsing = load('commentBrowsing.js');
+const navigation = load('readingNavigation.js');
 const code = compile('publicReviewUnderlines.js');
 
 const harness = () => {
@@ -39,6 +40,7 @@ const harness = () => {
       if (name === './readerCompatibility') return compatibility;
       if (name === './popupBadgeLayout') return layout;
       if (name === './commentBrowsing') return browsing;
+      if (name === './readingNavigation') return { ...navigation, installNavigationTracking: () => {} };
       if (name === './nativeTextToolbar') return {};
       if (name === './reviewInteractions') return {};
       throw new Error(name);

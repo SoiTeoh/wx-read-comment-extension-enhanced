@@ -843,3 +843,15 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 .wxrc_comment_expand:focus-visible, .wxrc_popup_load_more:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .wxrc_popup_load_more { width: 100%; }
 .wxrc_popup_progress { display: block; font-size: 12px; margin-top: 6px; }
+.wxrc_public_review_popup::-webkit-scrollbar,
+.comment-react-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+.wxrc_public_review_popup::-webkit-scrollbar-track,
+.comment-react-wrapper::-webkit-scrollbar-track { background: transparent; margin-block: 20px; }
+.wxrc_public_review_popup::-webkit-scrollbar-thumb,
+.comment-react-wrapper::-webkit-scrollbar-thumb { border-radius: 999px; border: 2px solid transparent; background: var(--wxrc-outline); background-clip: padding-box; }
+.wxrc_public_review_popup::-webkit-scrollbar-thumb:hover,
+.comment-react-wrapper::-webkit-scrollbar-thumb:hover { background-color: var(--wxrc-on-surface-muted); }
+.wxrc_public_review_popup::-webkit-scrollbar-button,
+.comment-react-wrapper::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.wxrc_public_review_popup::-webkit-scrollbar-corner,
+.comment-react-wrapper::-webkit-scrollbar-corner { background: transparent; }

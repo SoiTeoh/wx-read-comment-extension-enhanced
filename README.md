@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前发布版本：[**v1.5.0-beta.1**](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced/releases/tag/v1.5.0-beta.1)（2026-10-12 已核对 Release 存在）。本版汇总 M5 与 I0–I4，支持纵向原文操作和想法互动；仅在上下滚动模式挂载，左右双栏保持官方界面。实现与验收见 [I2 原文操作栏](docs/i2-vertical-text-operations.md)、[I3 想法互动](docs/i3-vertical-review-interactions.md)、[I4 互动回归](docs/i4-interaction-regression.md)和 [M6 发布准备](docs/m6-release-preparation.md)。本地 U1 开发已完成，尚未发布到安装包；更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
+当前发布版本：[**v1.5.0-beta.1**](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced/releases/tag/v1.5.0-beta.1)（2026-10-12 已核对 Release 存在）。本版汇总 M5 与 I0–I4，支持纵向原文操作和想法互动；仅在上下滚动模式挂载，左右双栏保持官方界面。实现与验收见 [I2 原文操作栏](docs/i2-vertical-text-operations.md)、[I3 想法互动](docs/i3-vertical-review-interactions.md)、[I4 互动回归](docs/i4-interaction-regression.md)和 [M6 发布准备](docs/m6-release-preparation.md)。本地 U1、U2 开发已完成，尚未发布到安装包；更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
 
 ## 主要功能
 
@@ -104,7 +104,7 @@
 
 ## 开发状态
 
-Current status: **Beta / v1.5.0-beta.1**，GitHub Release 已存在；本地 U1 改进尚未发布。
+Current status: **Beta / v1.5.0-beta.1**，GitHub Release 已存在；本地 U1／U2 改进尚未发布。
 
 当前版本已具备公开评论加载、划线、popup、重合 badge、可选侧栏和正文定位。下面按依赖顺序推进；每个阶段单独验收，不把规划中的功能当作已发布能力。
 
@@ -185,13 +185,15 @@ I0 已核实真实登录态原生工具栏、想法编辑器和回复详情，�
 | 阶段 | 优先级 | 目标与验收标准 | 状态 |
 | --- | --- | --- | --- |
 | U1 · 长评论与大量想法 | 高，先实施 | popup 首批渲染 30 条，手动追加已加载数据，不批量创建全部卡片；长评论可折叠／展开全文；同章同段恢复已加载数量、展开状态和列表位置；保留焦点、互动与全文，滚动和加载更多不发接口请求或重做映射 | 已完成：68 项离线测试、63 项 Chromium 场景通过；真实纵向长评论展开及位置恢复通过，见 [U1 记录](docs/u1-comment-browsing.md) |
-| U2 · 阅读位置与键盘操作 | 高，第二阶段 | 查看原生回复、切换侧栏或调整字号后尽量保持原文与评论位置；补充可关闭的附近评论、关闭弹窗及复制引用快捷键，不抢占编辑器输入 | 待开始 |
+| U2 · 阅读位置与键盘操作 | 高，第二阶段 | 查看原生回复、切换侧栏或调整字号后尽量保持原文与评论位置；补充可关闭的附近评论、关闭弹窗及复制引用快捷键，不抢占编辑器输入 | 已完成：71 项离线测试、69 项 Chromium 场景通过；真实字号、侧栏和回复位置回归通过。滚动条同步统一，见 [U2 记录与新截图](docs/u2-reading-navigation.md) |
 | U3 · 本地收藏与导出 | 可选新增，第三阶段 | 用户主动收藏公开想法与引用原文，在本地搜索并导出 Markdown；提供删除／清空，不后台收集，不读取私密内容 | 待开始 |
 | U4 · 评论浏览增强 | 中 | 按点赞数排序与作者筛选；未知数量单独处理，不影响原始接口顺序、正文映射或同段评论计数 | 待开始 |
 | U5 · 兼容性诊断 | 中 | 显示原生入口能力，生成不含账号、凭据及书籍正文的诊断报告，方便网站更新后排查 | 待开始 |
 | U6 · 插件内回复预览 | 后续 | 先核实纵向原生回复读取与分页；按需展开、手动加载更多，提交继续使用官方编辑器；不以受控结果替代真实分页验收 | 待开始，依赖读取能力核实 |
 
 互动反馈优先沿用 I4 已实现的等待、失败、结果未确认及手动刷新；在 U1／U2 中补齐相关 UI 与焦点回归。真实回复提交、真实分页和完整点赞／取消点赞往返继续作为本地手工验收项，由用户确认提交，不在自动化中操作真实账号。
+
+U2 的阅读快捷键默认关闭，可在侧栏设置中开启并保存：`Alt+Shift+C` 打开视口附近想法，`Alt+Shift+Y` 复制当前 popup 核实的原文，`Esc` 关闭 popup。输入框、可编辑内容、输入法组合输入、重复按键和可见原生遮罩期间不执行新增快捷操作。正文位置恢复仅使用当前章已映射划线，无可靠锚点、用户主动导航或恢复超时则不强行滚动。
 
 ## 来源与许可
 
