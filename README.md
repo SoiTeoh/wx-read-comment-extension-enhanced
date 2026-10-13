@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前发布版本：[**v1.5.0-beta.1**](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced/releases/tag/v1.5.0-beta.1)（2026-10-12 已核对 Release 存在）。本版汇总 M5 与 I0–I4，支持纵向原文操作和想法互动；仅在上下滚动模式挂载，左右双栏保持官方界面。实现与验收见 [I2 原文操作栏](docs/i2-vertical-text-operations.md)、[I3 想法互动](docs/i3-vertical-review-interactions.md)、[I4 互动回归](docs/i4-interaction-regression.md)和 [M6 发布准备](docs/m6-release-preparation.md)。本地 U1–U3 开发已完成，尚未发布到安装包；更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
+当前版本：**v1.6.0-beta.1**（2026-10-13，安装包与发布说明已准备，GitHub Release 待维护者上传）。本版汇总 U1–U3：长评论与分批浏览、统一滚动条、阅读位置恢复、可选快捷键、本地收藏和 Markdown 导出。仅增强上下滚动模式，左右双栏保持官方界面。见 [发布说明](docs/releases/v1.6.0-beta.1.md)与 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
 
 ## 主要功能
 
@@ -20,6 +20,14 @@
 - 使用章节与 layout version 校验异步映射结果，丢弃过期的结果（stale async result 防护）。
 
 ## 效果预览
+
+### 评论浏览与本地收藏（v1.6）
+
+[统一评论弹窗（日间）](docs/previews/u2-popup-day.png) · [夜间](docs/previews/u2-popup-night.png)
+
+![本地收藏管理](docs/previews/u3-favorites-day.png)
+
+[收藏夜间效果](docs/previews/u3-favorites-night.png) · [U1 浏览](docs/u1-comment-browsing.md) · [U2 阅读导航](docs/u2-reading-navigation.md) · [U3 收藏](docs/u3-local-favorites.md)
 
 ### 纵向原文操作与想法互动（v1.5）
 
@@ -64,6 +72,8 @@
 
 也可以从本仓库的 [GitHub Releases](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced/releases) 下载增强版 zip，解压后按上述方式加载。请勿将原项目商店版本或旧版安装包误认为本增强版。
 
+更新已有扩展时，将新运行文件替换到原解压目录，在扩展管理页重新加载扩展，再刷新阅读页。保留原扩展实例以延续设置与本地收藏。
+
 ### 本地安装示意
 
 下图是原项目保留的 Chrome 扩展加载示意，仅用于说明“加载已解压的扩展程序”的操作；请以本项目的 `build` 目录为准。
@@ -99,12 +109,12 @@
 - 仅展示微信读书接口返回的公开评论／公开想法；不读取、模拟或推测私密评论。
 - 微信读书原生划线不一定对应公开评论，原生划线本身不保证可打开插件 popup。
 - 部分历史 `range` 可能因正文版本或 Reader layout 不匹配而无法映射；此类评论仍可在侧栏查看，但不能定位到正文。
-- v1.5.0-beta.1 安装包已接入卡片点赞／取消点赞与原生回复入口。“写想法”和“评论”由用户在原生编辑器中确认提交；插件不自建发布编辑器，也不直接调用回复写接口。用户已确认浏览器中点赞可用、回复能打开官方评论页面；回复最终提交及真实分页仍未由代理验收。
+- v1.6.0-beta.1 安装包包含卡片点赞／取消点赞与原生回复入口。“写想法”和“评论”由用户在原生编辑器中确认提交；插件不自建发布编辑器，也不直接调用回复写接口。用户已确认浏览器中点赞可用、回复能打开官方评论页面；回复最终提交及真实分页仍未由代理验收。
 - 微信读书前端更新可能影响内部 Reader runtime 的兼容性。
 
 ## 开发状态
 
-Current status: **Beta / v1.5.0-beta.1**，GitHub Release 已存在；本地 U1–U3 改进尚未发布。
+Current status: **Beta / v1.6.0-beta.1**，U1–U3 已纳入安装包；GitHub Release 待维护者上传，U4–U6 待开发。
 
 当前版本已具备公开评论加载、划线、popup、重合 badge、可选侧栏和正文定位。下面按依赖顺序推进；每个阶段单独验收，不把规划中的功能当作已发布能力。
 
@@ -180,7 +190,9 @@ I0 已核实真实登录态原生工具栏、想法编辑器和回复详情，�
 
 ## 后续优化计划（2026-10-12）
 
-以下计划保持纵向阅读范围和现有 UI 风格，按优先级逐阶段开发；每阶段单独验收，不一次性叠加全部功能。v1.5.0-beta.1 的发布记录保持原样，后续开发尚未打包发布。
+v1.6.0-beta.1 的版本、验收和安装包核对见 [发布准备记录](docs/releases/v1.6.0-beta.1-preparation.md)；历史 M6 记录仍对应 v1.5.0-beta.1。
+
+以下计划保持纵向阅读范围和现有 UI 风格，按优先级逐阶段开发；每阶段单独验收，不一次性叠加全部功能。v1.5.0-beta.1 的历史发布记录保持原样；U1–U3 已纳入 v1.6.0-beta.1 安装包，U4–U6 尚未开始。
 
 | 阶段 | 优先级 | 目标与验收标准 | 状态 |
 | --- | --- | --- | --- |
