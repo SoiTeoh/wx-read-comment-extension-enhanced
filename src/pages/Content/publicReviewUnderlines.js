@@ -6,6 +6,7 @@ import { createNativeTextToolbar } from './nativeTextToolbar';
 import { appendReviewActions, isReviewDetailOpen } from './reviewInteractions';
 import { createPopupBrowsingMemory, isLongComment, POPUP_PAGE_SIZE } from './commentBrowsing';
 import { chooseReadingAnchor, anchorScrollTop, getNavigationVersion, installNavigationTracking, shortcutOperation } from './readingNavigation';
+import { appendFavoriteButton, openFavorites, closeFavorites } from './favorites';
 
 const REQUEST_SOURCE = 'WXRC';
 const RESPONSE_SOURCE = 'WXRC_PAGE';
@@ -146,6 +147,7 @@ const clearPublicReviewIndex = (chapterUid = '') => {
 };
 
 export const clearPublicReviewState = (chapterUid = '') => {
+  closeFavorites();
   readerCompatibility = null;
   renderGeneration += 1;
   activeChapterUid = String(chapterUid || '');
@@ -277,7 +279,9 @@ const showPopup = (event, reviews, group) => {
   close.textContent = '关闭';
   close.setAttribute('aria-label', '关闭公开评论');
   close.addEventListener('click', () => removePopup(true));
-  toolbar.append(count, close);
+  const favorites = document.createElement('button'); favorites.type='button'; favorites.textContent='本地收藏';
+  favorites.addEventListener('click',event=>{event.stopPropagation();openFavorites(favorites)});
+  toolbar.append(count, favorites, close);
   popup.appendChild(toolbar);
 
   const reposition = () => {
@@ -325,6 +329,7 @@ const showPopup = (event, reviews, group) => {
       update(); item.appendChild(expand);
     }
     popupCleanups.push(appendReviewActions(item, String(review.reviewId || '')));
+    popupCleanups.push(appendFavoriteButton(item.querySelector('.wxrc_review_actions'),review));
     items.appendChild(item);
   };
   const appendPage = target => {
@@ -779,7 +784,7 @@ export const initializePublicReviewUnderlines = (onInvalidated) => {
     const operation = shortcutOperation(event);
     const nativeMaskVisible = operation && Array.from(document.querySelectorAll('.wr_mask_Show')).some(node => { const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < window.innerWidth && rect.bottom > 0 && rect.top < window.innerHeight; });
     if (keyboardShortcuts && enhancementEnabled && operation && !isReviewDetailOpen() && !nativeMaskVisible &&
-      !event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .readerNotePanel, .wr_float_panel_container, .reader-font-control-panel-wrapper') && !hasActiveTextSelection()) {
+      !event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .readerNotePanel, .wr_float_panel_container, .reader-font-control-panel-wrapper, .wxrc_favorites_dialog') && !hasActiveTextSelection()) {
       if (operation === 'copy') {
         const copy = document.querySelector(`.${POPUP_CLASS} [data-operation="copy"]`);
         if (copy && !copy.disabled) { event.preventDefault(); copy.click(); }

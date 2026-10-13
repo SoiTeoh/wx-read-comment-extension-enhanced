@@ -1,10 +1,17 @@
 // Network observation is a fallback only. The content script first reads the
 // stable bookId from the reader HTML structured data.
 import { debugLog } from '../Content/debug';
+import { createFavoritesRepository } from '../Content/favoriteModel';
+const favorites = createFavoritesRepository(chrome.storage.local);
 
 const tabContext = new Map();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'WXRC_FAVORITES_MUTATE') {
+    if (sender.id !== chrome.runtime.id) return;
+    void favorites.mutate(message.operation,message.payload).then(items=>sendResponse({ok:true,items})).catch(error=>sendResponse({ok:false,error:['FAVORITE_DATA_INVALID','FAVORITE_TOO_LARGE','FAVORITE_TARGET_INVALID','FAVORITE_OPERATION_INVALID'].includes(error.message)?error.message:'FAVORITE_WRITE_FAILED'}));
+    return true;
+  }
   if (message === 'getBookId') {
     const tabId = sender.tab && sender.tab.id;
     sendResponse(

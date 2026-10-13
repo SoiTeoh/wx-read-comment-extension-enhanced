@@ -43,6 +43,7 @@ const harness = () => {
       if (name === './readingNavigation') return { ...navigation, installNavigationTracking: () => {} };
       if (name === './nativeTextToolbar') return {};
       if (name === './reviewInteractions') return {};
+      if (name === './favorites') return { closeFavorites: () => {} };
       throw new Error(name);
     },
   });

@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前发布版本：[**v1.5.0-beta.1**](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced/releases/tag/v1.5.0-beta.1)（2026-10-12 已核对 Release 存在）。本版汇总 M5 与 I0–I4，支持纵向原文操作和想法互动；仅在上下滚动模式挂载，左右双栏保持官方界面。实现与验收见 [I2 原文操作栏](docs/i2-vertical-text-operations.md)、[I3 想法互动](docs/i3-vertical-review-interactions.md)、[I4 互动回归](docs/i4-interaction-regression.md)和 [M6 发布准备](docs/m6-release-preparation.md)。本地 U1、U2 开发已完成，尚未发布到安装包；更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
+当前发布版本：[**v1.5.0-beta.1**](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced/releases/tag/v1.5.0-beta.1)（2026-10-12 已核对 Release 存在）。本版汇总 M5 与 I0–I4，支持纵向原文操作和想法互动；仅在上下滚动模式挂载，左右双栏保持官方界面。实现与验收见 [I2 原文操作栏](docs/i2-vertical-text-operations.md)、[I3 想法互动](docs/i3-vertical-review-interactions.md)、[I4 互动回归](docs/i4-interaction-regression.md)和 [M6 发布准备](docs/m6-release-preparation.md)。本地 U1–U3 开发已完成，尚未发布到安装包；更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)。
 
 ## 主要功能
 
@@ -104,7 +104,7 @@
 
 ## 开发状态
 
-Current status: **Beta / v1.5.0-beta.1**，GitHub Release 已存在；本地 U1／U2 改进尚未发布。
+Current status: **Beta / v1.5.0-beta.1**，GitHub Release 已存在；本地 U1–U3 改进尚未发布。
 
 当前版本已具备公开评论加载、划线、popup、重合 badge、可选侧栏和正文定位。下面按依赖顺序推进；每个阶段单独验收，不把规划中的功能当作已发布能力。
 
@@ -130,7 +130,7 @@ M4 在调用原生映射前检测 Reader 方法、正文画布与临时捕获能
 
 本地离线回归可运行 `npm test`；测试使用模拟的公开评论响应，不连接微信读书，也不读取登录凭据。涉及真实 Reader 布局、字号和鼠标命中的项目仍需在已登录的本地浏览器单独验收。
 
-完整受控回归运行 `npm run test:acceptance`，顺序执行离线测试、类型检查、构建与 M4／M5／I1／I2／I3／I4 Chromium 夹具。Playwright 安装在独立工具目录，安装步骤、性能判定和真实登录态手工清单见 [M5 验收记录](docs/m5-automation-acceptance.md)。模式隔离见 [I1 记录](docs/i1-vertical-mode-isolation.md)，原文操作栏见 [I2 验收记录与截图](docs/i2-vertical-text-operations.md)，卡片互动见 [I3 记录](docs/i3-vertical-review-interactions.md)，最新互动性能与恢复行为见 [I4 记录](docs/i4-interaction-regression.md)。
+完整受控回归运行 `npm run test:acceptance`，顺序执行离线测试、类型检查、开发构建与 M4／M5／I1–I4／U1–U3 Chromium 夹具。验收构建不覆盖已交付的发布 ZIP。Playwright 安装在独立工具目录，安装步骤、性能判定和真实登录态手工清单见 [M5 验收记录](docs/m5-automation-acceptance.md)。互动见 [I4 记录](docs/i4-interaction-regression.md)，最新本地收藏见 [U3 记录](docs/u3-local-favorites.md)。
 
   ## 新增开发目标：原生阅读操作与想法互动
 
@@ -186,7 +186,7 @@ I0 已核实真实登录态原生工具栏、想法编辑器和回复详情，�
 | --- | --- | --- | --- |
 | U1 · 长评论与大量想法 | 高，先实施 | popup 首批渲染 30 条，手动追加已加载数据，不批量创建全部卡片；长评论可折叠／展开全文；同章同段恢复已加载数量、展开状态和列表位置；保留焦点、互动与全文，滚动和加载更多不发接口请求或重做映射 | 已完成：68 项离线测试、63 项 Chromium 场景通过；真实纵向长评论展开及位置恢复通过，见 [U1 记录](docs/u1-comment-browsing.md) |
 | U2 · 阅读位置与键盘操作 | 高，第二阶段 | 查看原生回复、切换侧栏或调整字号后尽量保持原文与评论位置；补充可关闭的附近评论、关闭弹窗及复制引用快捷键，不抢占编辑器输入 | 已完成：71 项离线测试、69 项 Chromium 场景通过；真实字号、侧栏和回复位置回归通过。滚动条同步统一，见 [U2 记录与新截图](docs/u2-reading-navigation.md) |
-| U3 · 本地收藏与导出 | 可选新增，第三阶段 | 用户主动收藏公开想法与引用原文，在本地搜索并导出 Markdown；提供删除／清空，不后台收集，不读取私密内容 | 待开始 |
+| U3 · 本地收藏与导出 | 可选新增，第三阶段 | 用户主动收藏公开想法与引用原文，在本地搜索并导出 Markdown；提供删除／清空，不后台收集，不读取私密内容 | 已完成：80 项离线测试、76 项 Chromium 场景通过；真实本地收藏、搜索、删除及日夜界面通过，见 [U3 记录与截图](docs/u3-local-favorites.md) |
 | U4 · 评论浏览增强 | 中 | 按点赞数排序与作者筛选；未知数量单独处理，不影响原始接口顺序、正文映射或同段评论计数 | 待开始 |
 | U5 · 兼容性诊断 | 中 | 显示原生入口能力，生成不含账号、凭据及书籍正文的诊断报告，方便网站更新后排查 | 待开始 |
 | U6 · 插件内回复预览 | 后续 | 先核实纵向原生回复读取与分页；按需展开、手动加载更多，提交继续使用官方编辑器；不以受控结果替代真实分页验收 | 待开始，依赖读取能力核实 |
@@ -194,6 +194,8 @@ I0 已核实真实登录态原生工具栏、想法编辑器和回复详情，�
 互动反馈优先沿用 I4 已实现的等待、失败、结果未确认及手动刷新；在 U1／U2 中补齐相关 UI 与焦点回归。真实回复提交、真实分页和完整点赞／取消点赞往返继续作为本地手工验收项，由用户确认提交，不在自动化中操作真实账号。
 
 U2 的阅读快捷键默认关闭，可在侧栏设置中开启并保存：`Alt+Shift+C` 打开视口附近想法，`Alt+Shift+Y` 复制当前 popup 核实的原文，`Esc` 关闭 popup。输入框、可编辑内容、输入法组合输入、重复按键和可见原生遮罩期间不执行新增快捷操作。正文位置恢复仅使用当前章已映射划线，无可靠锚点、用户主动导航或恢复超时则不强行滚动。
+
+U3 在想法卡片增加“收藏／已收藏”，侧栏和 popup 同步状态；从侧栏或 popup 的“本地收藏”打开管理。可按书籍、章节、作者、正文和引用搜索，删除单条、二次确认清空全部，并导出全部收藏的 Markdown（不受当前搜索条件限制）。仅保存主动选中的公开内容快照；原文标明“已核实原文”或“公开想法附带引用”。收藏在当前浏览器的扩展本地存储，不跨设备同步，不自动更新快照；限制为 500 条、合计 2,000,000 字节及每条正文／引用各 60,000 字符，超限拒绝而不截断。开发更新后台后，需在 Chrome 扩展管理页重新加载扩展，再刷新阅读页。
 
 ## 来源与许可
 

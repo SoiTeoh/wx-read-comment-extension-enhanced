@@ -3,6 +3,7 @@ import { getFormattedDate, getReview } from './utils';
 import { getCompatibilityMessage } from './readerCompatibility';
 import ReviewActions from './ReviewActions';
 import { isLongComment } from './commentBrowsing';
+import { openFavorites } from './favorites';
 
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
@@ -160,6 +161,7 @@ const Comment = (props) => {
           </label>
         </div>
         <p className="wxrc_settings_description">
+          <button type="button" onClick={event=>openFavorites(event.currentTarget)}>本地收藏</button>
           <label><input type="checkbox" checked={settings?.keyboardShortcuts === true} onChange={event => onSettingChange?.('keyboardShortcuts', event.target.checked)} />启用阅读快捷键</label>
           {settings?.keyboardShortcuts && <span> Alt+Shift+C 打开附近想法；Alt+Shift+Y 复制弹窗引用；Esc 关闭弹窗。</span>}
           仅展示接口返回的公开评论和公开想法。带有特殊样式的划线可点击查看公开想法。
@@ -268,7 +270,7 @@ const Comment = (props) => {
                 dangerouslySetInnerHTML={{ __html: abstract }}
               />
             )}
-            <ReviewActions reviewId={reviewId} />
+            <ReviewActions reviewId={reviewId} entry={entry} />
           </div>
         );
       })}

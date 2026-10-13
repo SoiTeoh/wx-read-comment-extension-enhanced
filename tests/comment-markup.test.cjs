@@ -32,6 +32,7 @@ componentModule.require = (name) => name === './utils'
   ? { getReview: (entry) => entry.review || entry, getFormattedDate: () => '' }
   : name === './commentBrowsing' ? browsingModule.exports
   : name === './readerCompatibility' ? compatibilityModule.exports
+  : name === './favorites' ? { openFavorites: () => {} }
   : name === './ReviewActions' ? { default: () => null, __esModule: true } : require(name);
 componentModule._compile(compiled, sourcePath);
 const Comment = componentModule.exports.default;

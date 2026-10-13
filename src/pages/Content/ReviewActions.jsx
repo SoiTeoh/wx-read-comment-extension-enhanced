@@ -1,7 +1,8 @@
 import React, { useCallback, useSyncExternalStore } from 'react';
+import FavoriteAction from './FavoriteAction';
 import { getReviewActionLabels, getReviewInteractionState, performReviewOperation, subscribeReviewInteractions } from './reviewInteractions';
 
-export default function ReviewActions({ reviewId }) {
+export default function ReviewActions({ reviewId, entry }) {
   const subscribe = useCallback(listener => subscribeReviewInteractions(reviewId, listener), [reviewId]);
   const state = useSyncExternalStore(subscribe, () => getReviewInteractionState(reviewId));
   const labels = getReviewActionLabels(state);
@@ -15,5 +16,6 @@ export default function ReviewActions({ reviewId }) {
       title={state.capabilities.reply ? '打开这条想法的原生回复详情，由你提交' : reason} onClick={act('reply')}>▱ {labels.reply}</button>
     {(state.needsRefresh || !state.capabilities.like || !state.capabilities.reply) && <button type="button" data-review-operation="refresh" disabled={state.busy || !state.ready} onClick={act('refresh')}>刷新状态</button>}
     <span className="wxrc_review_action_status" role="status">{state.message || (state.ready && (!state.capabilities.like || !state.capabilities.reply) ? reason : '')}</span>
+    <FavoriteAction entry={entry} />
   </div>;
 }
