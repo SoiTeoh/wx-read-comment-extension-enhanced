@@ -809,6 +809,15 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     flex-direction: column;
     align-items: stretch;
 }
+.wxrc_browse_controls label:has(select[aria-label="按作者筛选评论"]) {
+    width: 100%;
+    min-width: 0;
+}
+.wxrc_browse_controls select[aria-label="按作者筛选评论"] {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+}
 .comment-react-wrapper .wxrc_comment_list[data-density="compact"] .comment-item {
     margin-bottom: 6px;
     padding: 10px 12px;

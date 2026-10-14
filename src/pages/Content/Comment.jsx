@@ -4,6 +4,7 @@ import { getCompatibilityMessage } from './readerCompatibility';
 import ReviewActions from './ReviewActions';
 import { isLongComment } from './commentBrowsing';
 import { openFavorites } from './favorites';
+import { getAuthorKey, getAuthorOptions, normalizeSortOrder, orderCommentRows } from './commentOrdering';
 
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
@@ -42,7 +43,9 @@ const Comment = (props) => {
   const [expandedContentIds, setExpandedContentIds] = useState(() => new Set());
   const [query, setQuery] = useState('');
   const [mappingFilter, setMappingFilter] = useState('all');
+  const [authorFilter, setAuthorFilter] = useState('');
   const commentData = list;
+  const authorOptions = useMemo(() => getAuthorOptions(commentData), [commentData]);
 
   useEffect(() => {
     setExpandedReviewIds(new Set());
@@ -52,6 +55,7 @@ const Comment = (props) => {
   useEffect(() => {
     setQuery('');
     setMappingFilter('all');
+    setAuthorFilter('');
   }, [reviewSync?.chapterUid]);
 
   const displayedComments = useMemo(() => {
@@ -59,11 +63,9 @@ const Comment = (props) => {
         entry,
         index,
         start: getMappedRangeStart(entry, index, reviewSync),
-      })).filter(({ entry, start }) => matchesCommentFilter(entry, Number.isFinite(start), query, mappingFilter));
-    return settings?.sortOrder === 'api'
-      ? indexed
-      : indexed.sort((a, b) => a.start - b.start || a.index - b.index);
-  }, [commentData, reviewSync, settings?.sortOrder, query, mappingFilter]);
+      })).filter(({ entry, start }) => (!authorFilter || getAuthorKey(entry) === authorFilter) && matchesCommentFilter(entry, Number.isFinite(start), query, mappingFilter));
+    return orderCommentRows(indexed, settings?.sortOrder);
+  }, [commentData, reviewSync, settings?.sortOrder, query, mappingFilter, authorFilter]);
 
   const toggleAbstract = useCallback((event) => {
     event.stopPropagation();
@@ -152,11 +154,12 @@ const Comment = (props) => {
             默认排序
             <select
               aria-label="右侧评论排序"
-              value={settings?.sortOrder === 'api' ? 'api' : 'reading'}
+              value={normalizeSortOrder(settings?.sortOrder)}
               onChange={(event) => onSettingChange?.('sortOrder', event.target.value)}
             >
               <option value="reading">阅读顺序</option>
               <option value="api">接口默认</option>
+              <option value="likes">点赞最多</option>
             </select>
           </label>
         </div>
@@ -184,9 +187,16 @@ const Comment = (props) => {
               <option value="compact">紧凑</option>
             </select>
           </label>
-          <button type="button" disabled={!query && mappingFilter === 'all'} onClick={() => { setQuery(''); setMappingFilter('all'); }}>清除筛选</button>
+          <label>作者
+            <select aria-label="按作者筛选评论" value={authorFilter} onChange={event => setAuthorFilter(event.target.value)}>
+              <option value="">全部作者</option>
+              {authorOptions.map(author => <option key={author.key} value={author.key}>{author.label}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={!query && mappingFilter === 'all' && !authorFilter} onClick={() => { setQuery(''); setMappingFilter('all'); setAuthorFilter(''); }}>清除筛选</button>
         </div>
         <p className="wxrc_settings_description" role="status">显示 {displayedComments.length} / {commentData.length} 条；筛选仅作用于侧栏。</p>
+        {settings?.sortOrder === 'likes' && <p className="wxrc_settings_description">按已加载的点赞数排序；未知数量置后，同数保留接口顺序。互动后列表不自动跳动，重新加载评论后更新排序。</p>}
       </div>
       {commentData.length === 0 && emptyTip}
       {commentData.length > 0 && displayedComments.length === 0 && <p className="wxrc_empty_state">没有符合筛选条件的评论。清除筛选可查看全部已加载评论。</p>}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Comment from './Comment';
+import { normalizeSortOrder } from './commentOrdering';
 import {
   filterReviewsByChapterUid,
   getChapterCatalog,
@@ -45,7 +46,7 @@ const loadSettings = async () => {
       followReadingPosition: stored?.followReadingPosition !== false,
       showPublicUnderlines: stored?.showPublicUnderlines !== false,
       showSidebar: stored?.showSidebar !== false,
-      sortOrder: stored?.sortOrder === 'api' ? 'api' : 'reading',
+      sortOrder: normalizeSortOrder(stored?.sortOrder),
       commentDensity: stored?.commentDensity === 'compact' ? 'compact' : 'comfortable',
       keyboardShortcuts: stored?.keyboardShortcuts === true,
     };
@@ -122,7 +123,7 @@ const start = async (session) => {
     if (key === 'showSidebar') prepareReadingPosition();
     settings = {
       ...settings,
-      [key]: key === 'sortOrder' ? (value === 'api' ? 'api' : 'reading')
+      [key]: key === 'sortOrder' ? normalizeSortOrder(value)
         : key === 'commentDensity' ? (value === 'compact' ? 'compact' : 'comfortable') : Boolean(value),
     };
     setFollowReadingPosition(settings.followReadingPosition);

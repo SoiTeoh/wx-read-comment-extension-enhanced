@@ -17,6 +17,9 @@ compatibilityModule._compile(babel.transformFileSync(compatibilityPath, {
 }).code, compatibilityPath);
 
 const sourcePath = path.resolve(__dirname, '../src/pages/Content/Comment.jsx');
+const orderingPath = path.resolve(__dirname, '../src/pages/Content/commentOrdering.js');
+const orderingModule = new Module(orderingPath, module);
+orderingModule._compile(babel.transformFileSync(orderingPath, { configFile:false, babelrc:false, presets:[['@babel/preset-env',{targets:{node:'current'}}]] }).code, orderingPath);
 const compiled = babel.transformFileSync(sourcePath, {
   configFile: false,
   babelrc: false,
@@ -31,6 +34,7 @@ componentModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
 componentModule.require = (name) => name === './utils'
   ? { getReview: (entry) => entry.review || entry, getFormattedDate: () => '' }
   : name === './commentBrowsing' ? browsingModule.exports
+  : name === './commentOrdering' ? orderingModule.exports
   : name === './readerCompatibility' ? compatibilityModule.exports
   : name === './favorites' ? { openFavorites: () => {} }
   : name === './ReviewActions' ? { default: () => null, __esModule: true } : require(name);

@@ -20,6 +20,7 @@ const gates = [
   ['U1 large-group and long-comment browsing', ['tests/u1-browser-regression.cjs']],
   ['U2 reading position and keyboard navigation', ['tests/u2-browser-regression.cjs']],
   ['U3 local favorites and Markdown export', ['tests/u3-browser-regression.cjs']],
+  ['U4 comment likes ordering and author filtering', ['tests/u4-browser-regression.cjs']],
 ];
 for (const [name, args] of gates) {
   console.log(`\nAcceptance gate: ${name}`);
