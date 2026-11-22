@@ -17,7 +17,7 @@ config.mode = 'production';
 if (!process.argv.includes('--no-zip')) config.plugins = (config.plugins || []).concat(
     new ZipPlugin({
         filename: `wx-read-comment-extension-enhanced-v${require('../package.json').version}.zip`,
-        path: path.join(__dirname, '../'),
+        path: path.join(__dirname, '../releases'),
     })
 );
 

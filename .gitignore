@@ -26,3 +26,4 @@ secrets.*.js
 
 # local release archives
 /*.zip
+/releases/*.zip

@@ -18,6 +18,9 @@ const layout = load('popupBadgeLayout.js');
 const browsing = load('commentBrowsing.js');
 const navigation = load('readingNavigation.js');
 const code = compile('publicReviewUnderlines.js');
+const bridgeClientCode = compile('bridgeClient.js');
+const reviewIndexCode = compile('reviewIndex.js');
+const popupRendererCode = compile('popupRenderer.js');
 
 const harness = () => {
   const listeners = new Map();
@@ -31,22 +34,39 @@ const harness = () => {
     clearTimeout(id) { timers.delete(id); },
     cancelAnimationFrame() {}, removeEventListener() {},
   };
-  const exports = {};
-  vm.runInNewContext(code, { window, exports, console: { warn() {} },
-    document: { querySelectorAll: () => [], querySelector: () => null, addEventListener() {} },
+  const baseDeps = {
+    './utils': { getReview: (entry) => entry.review || entry },
+    './debug': { debugLog() {} },
+    './readerCompatibility': compatibility,
+    './popupBadgeLayout': layout,
+    './commentBrowsing': browsing,
+    './readingNavigation': { ...navigation, installNavigationTracking: () => {} },
+    './nativeTextToolbar': {},
+    './reviewInteractions': {},
+    './favorites': { closeFavorites: () => {}, appendFavoriteButton: () => () => {}, openFavorites: () => {} },
+  };
+  const documentMock = { querySelectorAll: () => [], querySelector: () => null, addEventListener() {} };
+  const subModules = {};
+  const sharedContext = vm.createContext({
+    window,
+    console: { warn() {} },
+    document: documentMock,
     require(name) {
-      if (name === './utils') return { getReview: (entry) => entry.review || entry };
-      if (name === './debug') return { debugLog() {} };
-      if (name === './readerCompatibility') return compatibility;
-      if (name === './popupBadgeLayout') return layout;
-      if (name === './commentBrowsing') return browsing;
-      if (name === './readingNavigation') return { ...navigation, installNavigationTracking: () => {} };
-      if (name === './nativeTextToolbar') return {};
-      if (name === './reviewInteractions') return {};
-      if (name === './favorites') return { closeFavorites: () => {} };
+      if (subModules[name]) return subModules[name];
+      if (baseDeps[name]) return baseDeps[name];
       throw new Error(name);
     },
   });
+  const runInSharedContext = (subCode) => {
+    const subExports = {};
+    sharedContext.exports = subExports;
+    vm.runInContext(subCode, sharedContext);
+    return subExports;
+  };
+  subModules['./bridgeClient'] = runInSharedContext(bridgeClientCode);
+  subModules['./reviewIndex'] = runInSharedContext(reviewIndexCode);
+  subModules['./popupRenderer'] = runInSharedContext(popupRendererCode);
+  const exports = runInSharedContext(code);
   exports.initializePublicReviewUnderlines(() => {});
   const reply = (payload) => listeners.get('message')({ source: window,
     data: { source: 'WXRC_PAGE', requestId: messages.at(-1).requestId, ...payload },
