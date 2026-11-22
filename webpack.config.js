@@ -169,7 +169,22 @@ var options = {
           from: 'src/assets/img/wxread-icon.png',
           to: path.join(__dirname, 'build'),
           force: true,
-        }
+        },
+        {
+          from: 'src/assets/img/icon-16.png',
+          to: path.join(__dirname, 'build'),
+          force: true,
+        },
+        {
+          from: 'src/assets/img/icon-48.png',
+          to: path.join(__dirname, 'build'),
+          force: true,
+        },
+        {
+          from: 'src/assets/img/icon-128.png',
+          to: path.join(__dirname, 'build'),
+          force: true,
+        },
       ],
     })
   ].filter(Boolean),

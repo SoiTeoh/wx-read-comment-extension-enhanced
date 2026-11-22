@@ -5,6 +5,7 @@ import ReviewActions from './ReviewActions';
 import { isLongComment } from './commentBrowsing';
 import { openFavorites } from './favorites';
 import { getAuthorKey, getAuthorOptions, normalizeSortOrder, orderCommentRows } from './commentOrdering';
+import { buildDiagnosticReport, formatDiagnosticReport } from './compatibilityDiagnostics';
 
 const collapsedClass = 'comment-item-abstract one-line';
 const expandedClass = 'comment-item-abstract';
@@ -44,6 +45,7 @@ const Comment = (props) => {
   const [query, setQuery] = useState('');
   const [mappingFilter, setMappingFilter] = useState('all');
   const [authorFilter, setAuthorFilter] = useState('');
+  const [diagnosticStatus, setDiagnosticStatus] = useState('');
   const commentData = list;
   const authorOptions = useMemo(() => getAuthorOptions(commentData), [commentData]);
 
@@ -77,6 +79,25 @@ const Comment = (props) => {
       return next;
     });
   }, []);
+
+  const handleCopyDiagnostics = useCallback(async () => {
+    const version =
+      typeof chrome !== 'undefined' && chrome.runtime?.getManifest
+        ? chrome.runtime.getManifest().version
+        : '1.6.0';
+    const report = buildDiagnosticReport({
+      reviewSync: { ...reviewSync, totalReviewCount: commentData.length },
+      extensionVersion: version,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    });
+    const text = formatDiagnosticReport(report);
+    try {
+      await navigator.clipboard.writeText(text);
+      setDiagnosticStatus('已复制脱敏诊断报告');
+    } catch (_error) {
+      setDiagnosticStatus('复制失败，请检查剪贴板权限');
+    }
+  }, [reviewSync, commentData.length]);
 
   const emptyTip = loadStatus === 'loading'
     ? <p className="wxrc_empty_state" role="status">正在加载公开评论…</p>
@@ -121,6 +142,7 @@ const Comment = (props) => {
             <p>{getCompatibilityMessage(reviewSync.compatibility.code)}</p>
             <p>已加载的公开评论仍可搜索和阅读。</p>
             <button type="button" onClick={reviewSync.onRetryCompatibility}>重试定位</button>
+            <button type="button" onClick={handleCopyDiagnostics}>复制诊断报告</button>
           </div>
         )}
         <div className="wxrc_settings" role="group" aria-label="公开评论设置">
@@ -165,6 +187,8 @@ const Comment = (props) => {
         </div>
         <p className="wxrc_settings_description">
           <button type="button" onClick={event=>openFavorites(event.currentTarget)}>本地收藏</button>
+          <button type="button" onClick={handleCopyDiagnostics}>诊断报告</button>
+          {diagnosticStatus && <span role="status">{diagnosticStatus} </span>}
           <label><input type="checkbox" checked={settings?.keyboardShortcuts === true} onChange={event => onSettingChange?.('keyboardShortcuts', event.target.checked)} />启用阅读快捷键</label>
           {settings?.keyboardShortcuts && <span> Alt+Shift+C 打开附近想法；Alt+Shift+Y 复制弹窗引用；Esc 关闭弹窗。</span>}
           仅展示接口返回的公开评论和公开想法。带有特殊样式的划线可点击查看公开想法。

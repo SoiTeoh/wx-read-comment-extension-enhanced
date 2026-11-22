@@ -2,7 +2,7 @@
 
 基于原项目 [wx-read-comment-extension](https://github.com/my19940202/wx-read-comment-extension) 开发的非官方增强版本，面向微信读书网页版。本仓库为 [SoiTeoh/wx-read-comment-extension-enhanced](https://github.com/SoiTeoh/wx-read-comment-extension-enhanced)，与原作者发布的扩展相互独立。
 
-当前版本：**v1.6.0-beta.1**（本地已集成 U4 点赞排序与作者筛选，待打包发布）。仅增强**上下滚动阅读模式**，左右双栏保持官方界面。详细更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)，开发与演进路线见 [开发规划](docs/development-plan.md)。
+当前版本：**v1.6.0**（已集成 U1–U5、动态重合标记与右侧页边聚合展示）。仅增强**上下滚动阅读模式**，左右双栏保持官方界面。详细更新记录见 [CHANGELOG.zh.md](CHANGELOG.zh.md)，开发与演进路线见 [开发规划](docs/development-plan.md)。
 
 ## 主要功能
 

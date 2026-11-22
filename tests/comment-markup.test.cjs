@@ -36,6 +36,7 @@ componentModule.require = (name) => name === './utils'
   : name === './commentBrowsing' ? browsingModule.exports
   : name === './commentOrdering' ? orderingModule.exports
   : name === './readerCompatibility' ? compatibilityModule.exports
+  : name === './compatibilityDiagnostics' ? { buildDiagnosticReport: () => ({}), formatDiagnosticReport: () => '' }
   : name === './favorites' ? { openFavorites: () => {} }
   : name === './ReviewActions' ? { default: () => null, __esModule: true } : require(name);
 componentModule._compile(compiled, sourcePath);
