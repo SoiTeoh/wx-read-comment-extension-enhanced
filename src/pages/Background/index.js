@@ -107,6 +107,17 @@ chrome.webRequest.onCompleted.addListener(
       }
 
       await writeTabContext(details.tabId, context);
+
+      if (
+        details.method === 'POST' &&
+        details.statusCode >= 200 &&
+        details.statusCode < 400 &&
+        /\/web\/review\/(add|delete|edit)\b/.test(requestUrl)
+      ) {
+        chrome.tabs
+          ?.sendMessage?.(details.tabId, { type: 'WXRC_CHAPTER_REVIEWS_CHANGED' })
+          ?.catch?.(() => {});
+      }
     })();
   },
   {

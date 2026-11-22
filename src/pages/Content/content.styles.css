@@ -319,6 +319,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     height: 100%;
     /* Sibling of Reader passage content, rather than a child of its canvas layer. */
     z-index: 4;
+    overflow: visible;
     pointer-events: none;
 }
 .wxrc_public_review_layer[hidden] {
@@ -363,6 +364,7 @@ body.wxrc_sidebar_visible .app .readerCatalog {
 }
 .wr_whiteTheme .wxrc_public_review_badge:hover,
 .wr_whiteTheme .wxrc_public_review_badge:focus-visible {
+    opacity: 1;
     background: rgba(218, 230, 241, .98);
 }
 .wxrc_public_review_wrapper.wxrc_public_review_hover .wxrc_public_review {
@@ -698,13 +700,17 @@ body.wxrc_sidebar_visible .app .readerCatalog {
     background: var(--wxrc-primary-container);
     color: var(--wxrc-on-primary-container);
     box-shadow: 0 2px 6px rgba(0, 0, 0, .17);
-    font-weight: 700;
+    padding: 0 5px;
+    font-weight: 600;
+    opacity: .72;
+    transition: opacity 140ms ease, background-color 140ms ease, border-color 140ms ease;
     font-variant-numeric: tabular-nums;
 }
 .wxrc_public_review_badge:hover,
 .wxrc_public_review_badge:focus-visible,
 .wr_whiteTheme .wxrc_public_review_badge:hover,
 .wr_whiteTheme .wxrc_public_review_badge:focus-visible {
+    opacity: 1;
     border-color: var(--wxrc-primary);
     background: var(--wxrc-surface-high);
     outline: 1px solid var(--wxrc-primary);

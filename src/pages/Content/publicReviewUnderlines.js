@@ -1,6 +1,10 @@
 import { getReview } from './utils';
 import { debugLog } from './debug';
-import { badgeWidthForCount, positionBadge } from './popupBadgeLayout';
+import {
+  badgeWidthForCount,
+  formatBadgeLabel,
+  positionBadge,
+} from './popupBadgeLayout';
 import { compatibilityFailure } from './readerCompatibility';
 import { isReviewDetailOpen } from './reviewInteractions';
 import { createPopupBrowsingMemory } from './commentBrowsing';
@@ -61,6 +65,9 @@ let enhancementEnabled = true;
 let keyboardShortcuts = false;
 let pendingReadingAnchor = null;
 let readingRestoreTimer = 0;
+let badgeRefreshTimer = 0;
+let nativeUnderlineObserver = null;
+let observedUnderlineHost = null;
 
 const popupBrowsingMemory = createPopupBrowsingMemory();
 
@@ -140,7 +147,16 @@ const setActiveRange = (rangeKey) => {
     });
 };
 
+const disconnectNativeUnderlineObserver = () => {
+  window.clearTimeout(badgeRefreshTimer);
+  badgeRefreshTimer = 0;
+  nativeUnderlineObserver?.disconnect();
+  nativeUnderlineObserver = null;
+  observedUnderlineHost = null;
+};
+
 const clearPublicReviewIndex = (chapterUid = '') => {
+  disconnectNativeUnderlineObserver();
   window.cancelAnimationFrame(scrollFrame);
   scrollFrame = 0;
   window.cancelAnimationFrame(hoverFrame);
@@ -308,37 +324,99 @@ const createUnderline = (rect, group) => {
   return wrapper;
 };
 
-const createOverlapBadge = (group, canvasSize, placedBadges) => {
-  const lastRect = group.rects.reduce(
-    (last, rect) =>
-      !last || rect.y > last.y || (rect.y === last.y && rect.x > last.x)
-        ? rect
-        : last,
-    null
-  );
-  if (!lastRect) return null;
+const ROW_CLUSTER_THRESHOLD_PX = 20;
+
+const getRightGutterWidth = (containerRect) => {
+  const viewportWidth = Number(window.innerWidth) || 0;
+  if (!viewportWidth) return 0;
+  const sidebarEl = sidebarVisible
+    ? document.querySelector('.chrex-comment-wrapper')
+    : null;
+  const sidebarLeft = sidebarEl?.getBoundingClientRect?.().left;
+  const rightBoundary =
+    Number.isFinite(sidebarLeft) && sidebarLeft > containerRect.right
+      ? Math.min(viewportWidth, sidebarLeft)
+      : viewportWidth;
+  return Math.max(0, rightBoundary - containerRect.right - 8);
+};
+
+const createOverlapBadge = (
+  cluster,
+  canvasSize,
+  placedBadges,
+  rightGutterWidth
+) => {
+  const { anchorRect, reviews, primaryGroup } = cluster;
+  if (!anchorRect || !reviews.length) return null;
 
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = BADGE_CLASS;
-  badge.dataset.rangeKey = group.key;
-  badge.textContent = String(group.reviews.length);
-  badge.title = `查看 ${group.reviews.length} 条公开想法`;
+  badge.dataset.rangeKey = primaryGroup.key;
+  badge.textContent = formatBadgeLabel(reviews.length);
+  badge.title = `查看 ${reviews.length} 条公开想法`;
   badge.setAttribute('aria-label', badge.title);
 
-  const width = badgeWidthForCount(group.reviews.length);
+  const width = badgeWidthForCount(reviews.length);
   const position = positionBadge(
-    lastRect,
+    anchorRect,
     canvasSize,
     { width, height: 18 },
-    placedBadges
+    placedBadges,
+    4,
+    { rightGutterWidth }
   );
   placedBadges.push(position);
   badge.style.left = `${position.x}px`;
   badge.style.top = `${position.y}px`;
   badge.style.width = `${width}px`;
-  badge.addEventListener('click', (event) => openGroupPopup(event, group));
+  badge.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (sidebarVisible) setActiveRange(primaryGroup.key);
+    popupController.showPopup(event, reviews, primaryGroup);
+  });
   return badge;
+};
+
+const clusterOverlappingGroupsByRow = (overlapping) => {
+  const sorted = [...overlapping].sort((a, b) => a.anchorY - b.anchorY);
+  const clusters = [];
+  for (const item of sorted) {
+    const last = clusters[clusters.length - 1];
+    if (last && Math.abs(item.anchorY - last.anchorY) <= ROW_CLUSTER_THRESHOLD_PX) {
+      last.items.push(item);
+      if (item.group.reviews.length > last.primaryGroup.reviews.length) {
+        last.primaryGroup = item.group;
+      }
+      for (const review of item.group.reviews) {
+        const id = getReviewId(review);
+        if (!id || !last.seenIds.has(id)) {
+          if (id) last.seenIds.add(id);
+          last.reviews.push(review);
+        }
+      }
+    } else {
+      const seenIds = new Set();
+      const reviews = [];
+      for (const review of item.group.reviews) {
+        const id = getReviewId(review);
+        if (!id || !seenIds.has(id)) {
+          if (id) seenIds.add(id);
+          reviews.push(review);
+        }
+      }
+      clusters.push({
+        anchorY: item.anchorY,
+        anchorRect: item.lastRect,
+        primaryGroup: item.group,
+        items: [item],
+        seenIds,
+        reviews,
+      });
+    }
+  }
+  return clusters;
 };
 
 const appendOverlapBadges = (index, layer, container, canvasSize) => {
@@ -358,7 +436,7 @@ const appendOverlapBadges = (index, layer, container, canvasSize) => {
     }
   );
 
-  const placedBadges = [];
+  const overlapping = [];
   for (const group of index.ranges.values()) {
     const overlaps = group.rects.some((rect) =>
       nativeRects.some(
@@ -370,9 +448,102 @@ const appendOverlapBadges = (index, layer, container, canvasSize) => {
       )
     );
     if (!overlaps) continue;
-    const badge = createOverlapBadge(group, canvasSize, placedBadges);
+    const lastRect = group.rects.reduce(
+      (last, rect) =>
+        !last || rect.y > last.y || (rect.y === last.y && rect.x > last.x)
+          ? rect
+          : last,
+      null
+    );
+    if (!lastRect) continue;
+    overlapping.push({
+      group,
+      lastRect,
+      anchorY: lastRect.y + lastRect.h / 2,
+    });
+  }
+
+  const rightGutterWidth = getRightGutterWidth(canvasBox);
+  const clusters = clusterOverlappingGroupsByRow(overlapping);
+  const placedBadges = [];
+  for (const cluster of clusters) {
+    const badge = createOverlapBadge(
+      cluster,
+      canvasSize,
+      placedBadges,
+      rightGutterWidth
+    );
     if (badge) layer.appendChild(badge);
   }
+};
+
+export const refreshOverlapBadges = () => {
+  if (!enhancementEnabled || !publicReviewIndex.ranges.size) return false;
+  if (publicReviewIndex.chapterUid !== activeChapterUid) return false;
+  const layer = document.querySelector(`.${LAYER_CLASS}`);
+  const container = document.querySelector('.wr_canvasContainer');
+  if (!layer || !container) return false;
+  layer.querySelectorAll(`.${BADGE_CLASS}`).forEach((node) => node.remove());
+  const containerRect = container.getBoundingClientRect();
+  appendOverlapBadges(publicReviewIndex, layer, container, {
+    width: containerRect.width,
+    height: containerRect.height,
+  });
+  return true;
+};
+
+const isNativeUnderlineNode = (node) => {
+  if (!node || node.nodeType !== 1) return false;
+  if (node.closest?.(`.${LAYER_CLASS}`)) return false;
+  if (node.matches?.('.wr_underline_wrapper:not(.wxrc_public_review_wrapper)')) {
+    return true;
+  }
+  return Boolean(
+    node.querySelector?.(
+      '.wr_underline_wrapper:not(.wxrc_public_review_wrapper)'
+    )
+  );
+};
+
+const isNativeUnderlineMutation = (mutation) => {
+  if (mutation.type === 'attributes') {
+    return isNativeUnderlineNode(mutation.target);
+  }
+  if (mutation.type !== 'childList') return false;
+  for (const node of mutation.addedNodes || []) {
+    if (isNativeUnderlineNode(node)) return true;
+  }
+  for (const node of mutation.removedNodes || []) {
+    if (isNativeUnderlineNode(node)) return true;
+  }
+  return false;
+};
+
+const scheduleOverlapBadgeRefresh = () => {
+  if (!enhancementEnabled) return;
+  window.clearTimeout(badgeRefreshTimer);
+  badgeRefreshTimer = window.setTimeout(() => {
+    badgeRefreshTimer = 0;
+    refreshOverlapBadges();
+  }, 80);
+};
+
+const observeNativeUnderlines = (host) => {
+  if (typeof MutationObserver !== 'function' || !host) return;
+  if (observedUnderlineHost === host && nativeUnderlineObserver) return;
+  disconnectNativeUnderlineObserver();
+  observedUnderlineHost = host;
+  nativeUnderlineObserver = new MutationObserver((mutations) => {
+    if (mutations.some(isNativeUnderlineMutation)) {
+      scheduleOverlapBadgeRefresh();
+    }
+  });
+  nativeUnderlineObserver.observe(host, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style'],
+  });
 };
 
 const selectNearestRange = () => {
@@ -837,6 +1008,7 @@ export const renderPublicReviewUnderlines = async (entries, chapterUid) => {
       width: containerRect.width,
       height: containerRect.height,
     });
+    observeNativeUnderlines(overlayHost);
 
     const anchor = pendingReadingAnchor;
     window.clearTimeout(readingRestoreTimer);

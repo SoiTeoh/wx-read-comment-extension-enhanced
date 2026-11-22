@@ -14,7 +14,7 @@ const layoutModule = new Module(sourcePath, module);
 layoutModule.filename = sourcePath;
 layoutModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
 layoutModule._compile(compiled, sourcePath);
-const { badgeWidthForCount, positionBadge, positionPopup } = layoutModule.exports;
+const { badgeWidthForCount, formatBadgeLabel, positionBadge, positionPopup } = layoutModule.exports;
 
 test('popup 在视口四角和窄窗口内保持完整可见', () => {
   const viewport = { width: 320, height: 300 };
@@ -27,6 +27,8 @@ test('popup 在视口四角和窄窗口内保持完整可见', () => {
 });
 
 test('多位数 badge 宽度增加，密集 badge 在章节边缘错位而不重叠', () => {
+  assert.equal(formatBadgeLabel(99), '99');
+  assert.equal(formatBadgeLabel(120), '99+');
   assert.ok(badgeWidthForCount(100) > badgeWidthForCount(1));
   const canvas = { width: 300, height: 120 };
   const badge = { width: badgeWidthForCount(12), height: 18 };
@@ -43,4 +45,17 @@ test('多位数 badge 宽度增加，密集 badge 在章节边缘错位而不重
     ));
     placed.push(item);
   }
+});
+
+test('右侧留白充足时 badge 放置在正文右侧页边外且不遮挡文字', () => {
+  const canvas = { width: 600, height: 300 };
+  const badge = { width: badgeWidthForCount(12), height: 18 };
+  const midLineRect = { x: 120, y: 80, w: 140, h: 20 };
+  const placed = [];
+  const first = positionBadge(midLineRect, canvas, badge, placed, 4, { rightGutterWidth: 80 });
+  assert.ok(first.x >= canvas.width + 10);
+  placed.push(first);
+  const second = positionBadge(midLineRect, canvas, badge, placed, 4, { rightGutterWidth: 80 });
+  assert.equal(second.x, first.x);
+  assert.ok(Math.abs(second.y - first.y) >= badge.height + 4);
 });

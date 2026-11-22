@@ -72,7 +72,7 @@ const renderComments = (root, list, chapterName, loadStatus, onReload, reviewSyn
 
 const start = async (session) => {
   let root, wrapper, syncTimer;
-  let scheduledSyncForce = false, syncInFlight = false, syncAgain = false, syncAgainForce = false;
+  let scheduledSyncForce = false, scheduledSyncSilent = false, syncInFlight = false, syncAgain = false, syncAgainForce = false, syncAgainSilent = false;
   const live = () => session.active && !document.querySelector('.readerControls_item.isHorizontalReader');
   const stillVertical = async () => live() && await resolveReaderMode() === 'vertical' && live();
   const onDispose = cleanup => session.cleanups.push(cleanup);
@@ -213,11 +213,13 @@ const start = async (session) => {
     renderLatestComments();
   };
 
-  const syncCurrentChapter = async (force = false) => {
+  const syncCurrentChapter = async (force = false, silent = false) => {
     if (!live()) return;
     if (syncInFlight) {
+      syncAgainSilent = syncAgain ? (syncAgainSilent && silent) : silent;
       syncAgain = true;
       syncAgainForce = syncAgainForce || force;
+      syncAgainSilent = syncAgainSilent && silent;
       return;
     }
     syncInFlight = true;
@@ -257,7 +259,7 @@ const start = async (session) => {
       }
       activeChapterUid = chapter.chapterUid;
       currentChapterName = chapter.chapterName || '';
-      if (force) {
+      if (force && !silent) {
         loadStatus = 'loading';
         renderLatestComments();
       }
@@ -328,21 +330,22 @@ const start = async (session) => {
       syncInFlight = false;
       if (live() && syncAgain) {
         syncAgain = false;
-        const rerunForce = syncAgainForce;
-        syncAgainForce = false;
-        void syncCurrentChapter(rerunForce);
+        const rerunForce = syncAgainForce; const rerunSilent = syncAgainSilent;
+        syncAgainForce = false; syncAgainSilent = false;
+        void syncCurrentChapter(rerunForce, rerunSilent);
       }
     }
   };
 
-  function scheduleSync(force = false) {
+  function scheduleSync(force = false, silent = false) {
     if (!live() || !readyForSync) return;
+    scheduledSyncSilent = scheduledSyncForce ? (scheduledSyncSilent && silent) : silent;
     scheduledSyncForce = scheduledSyncForce || force;
     window.clearTimeout(syncTimer);
     syncTimer = window.setTimeout(() => {
-      const runForce = scheduledSyncForce;
-      scheduledSyncForce = false;
-      void syncCurrentChapter(runForce);
+      const runForce = scheduledSyncForce; const runSilent = scheduledSyncSilent;
+      scheduledSyncForce = false; scheduledSyncSilent = false;
+      void syncCurrentChapter(runForce, runSilent);
     }, 180);
   }
 
@@ -350,6 +353,7 @@ const start = async (session) => {
   if (!live()) return;
 
   let lastBodyClassName = document.body.className;
+  let hadNotePanelOpen = Boolean(document.querySelector('.readerNotePanel'));
   const observer = new MutationObserver((mutations) => {
     if (!live()) return;
     const bodyClassChanged = mutations.some(
@@ -368,6 +372,13 @@ const start = async (session) => {
       }
       return;
     }
+    const notePanelOpen = Boolean(document.querySelector('.readerNotePanel'));
+    if (hadNotePanelOpen && !notePanelOpen) {
+      hadNotePanelOpen = false;
+      scheduleSync(true, true);
+      return;
+    }
+    hadNotePanelOpen = notePanelOpen;
     scheduleSync();
   });
   observer.observe(document.body, {
@@ -383,6 +394,13 @@ const start = async (session) => {
     subtree: true,
   });
   onDispose(() => observer.disconnect());
+  const onRuntimeMessage = (message) => {
+    if (message?.type === 'WXRC_CHAPTER_REVIEWS_CHANGED') {
+      scheduleSync(true, true);
+    }
+  };
+  chrome.runtime?.onMessage?.addListener?.(onRuntimeMessage);
+  onDispose(() => chrome.runtime?.onMessage?.removeListener?.(onRuntimeMessage));
   const schedule = () => scheduleSync();
   for (const event of ['popstate', 'hashchange', 'scroll']) {
     window.addEventListener(event, schedule, event === 'scroll');
